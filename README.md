@@ -8,27 +8,28 @@ This repo serves as the central hub for all laboratory tasks and assignments ass
 
 The repository is organized as follows to ensure ease of navigation and maintainability:
 
-- **IntroductionToRobotics/**
+- **intro-to-robotics/**
   - **README.md**: Main README file containing repository overview and other details.
   - **Homeworks/**: Folder containing all homework assignments.
-    - **Homework1_Setup/**: First homework assignment focused on environment setup.
-      - **README.md**: Specifics about Homework #1.
-      - **Install_Instructions.md**: Installation guide, if applicable.
-      - **Screenshots/**: Screenshots or pictures related to Homework #1.
-    - **Homework2_[Topic]/**: Second homework assignment (example).
-      - **README.md**: Specifics about Homework #2.
-      - **Code/**: Code files for Homework #2.
-      - **Assets/**: Any additional resources for Homework #2.
+    - **Homework[x]_[TOPIC]/**: X'st homework assignment focused on TOPIC.
+      - **README.md**: Specifics about Homework #x
+      - **Instructions.md**: Installation guide, if applicable.
+      - **Screenshots/**: Videos or pictures related to Homework #x.
+      - **src/**: Code files for Homework #x
+      - **Assets/**: Any additional resources for Homework
+        **TBD**: Others
     - ...
-  - **Projects/**: Folder for projects, if applicable.
+  - **Projects/**: Folder for projects.
     - **Project1_[Topic]/**: First project assignment (example).
       - **README.md**: Specifics about Project #1.
       - **Code/**: Code files for Project #1.
       - **Assets/**: Any additional resources for Project #1.
+      - **TBD**: Others
     - ...
   - **Resources/**: Folder containing additional resources and materials.
-    - **Arduino_Setup_Guide.md**: Guide for setting up Arduino.
-    - **Recommended_Books.md**: List of recommended reading materials.
     - **Useful_Links.md**: Compilation of useful external links.
+    - **TBD**: Others
 
 Each folder and file in the structure serves a specific purpose and is described next to it for quick reference.
+**Homework #1 - Setting Up the Environment (Deadline: 20th of October, 23:59)** 
+The primary goal of this homework is to set up the development environment for the course. This involves installing the Arduino IDE, as we will be extensively working with it throughout the semester. Additionally, this homework requires the creation of a private GitHub repository that adheres to specific guidelines.
