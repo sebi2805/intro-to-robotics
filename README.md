@@ -17,7 +17,7 @@ The repository is organized as follows to ensure ease of navigation and maintain
       - **Screenshots/**: Videos or pictures related to Homework #x.
       - **src/**: Code files for Homework #x
       - **Assets/**: Any additional resources for Homework
-        **TBD**: Others
+      - **TBD**: Others
   - **Projects/**: Folder for projects.
     - **Project1\_[Topic]/**: First project assignment (example).
       - **README.md**: Specifics about Project #1.
