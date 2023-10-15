@@ -18,14 +18,12 @@ The repository is organized as follows to ensure ease of navigation and maintain
       - **src/**: Code files for Homework #x
       - **Assets/**: Any additional resources for Homework
         **TBD**: Others
-    - ...
   - **Projects/**: Folder for projects.
     - **Project1\_[Topic]/**: First project assignment (example).
       - **README.md**: Specifics about Project #1.
       - **Code/**: Code files for Project #1.
       - **Assets/**: Any additional resources for Project #1.
       - **TBD**: Others
-    - ...
   - **Resources/**: Folder containing additional resources and materials.
     - **Useful_Links.md**: Compilation of useful external links.
     - **TBD**: Others
