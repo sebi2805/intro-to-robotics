@@ -1,39 +1,41 @@
-**Homework #2: Controlling RGB LEDs with Potentiometers**
+## Completed Homework #2: Controlling RGB LEDs with Potentiometers
 
-#### Completed By: [Your Name]
+### Deadline Met: 23rd October 2023
 
-#### Deadline: 23rd October 2023
+### [Showcase Video on YouTube](https://www.youtube.com/shorts/dX5UbsVYVTg)
 
-#### Showcase: [YouTube Video](https://www.youtube.com/shorts/dX5UbsVYVTg)
+#### Objectives Achieved
 
-### Objectives Achieved
+- Controlled each channel (Red, Green, Blue) of RGB LED using individual potentiometers.
+- Gained hands-on experience interfacing potentiometers with Arduino.
+- Dynamic control of RGB LEDs based on real-time analog readings.
 
-Successfully controlled each channel (Red, Green, and Blue) of an RGB LED using individual potentiometers. This allowed me to gain practical experience in interfacing potentiometers with an Arduino board and dynamically controlling RGB LEDs based on real-time analog readings.
+#### Components Utilized
 
-### Components Used
+- **RGB LED**: 1
+- **Potentiometers**: 4 (extra one for minimal signal value implementation)
+- **Resistors and Wires**: 330Ω resistors and necessary wiring.
 
-- 1 RGB LED
-- 4 Potentiometers (An extra one for implementing a minimal signal value)
-- Resistors (330Ω) and necessary wiring
+#### Technical Highlights
 
-### Technical Implementation
+- Individual control of RGB LED colors using separate potentiometers.
+- Utilization of Arduino's analog-to-digital conversion to read potentiometer values.
+- Mapped potentiometer readings to appropriate PWM values for LED control.
 
-I employed separate potentiometers to individually control each color channel of the RGB LED: Red, Green, and Blue. I used the Arduino's analog inputs to read the potentiometers' values and the `map()` function to convert these to appropriate PWM values for the LED pins.
+#### Coding Standards
 
-### Code Quality
+- Clean, well-structured code.
+- Use of meaningful constants instead of "magic numbers."
+- Implementation of filters like moving averages and minimal displayable values.
 
-- My code is clean and well-structured, adhering to best coding practices.
-- I've used well-named constants instead of "magic numbers."
-- I've implemented filters, such as moving averages and a minimal signal display value, to smooth out the LED's color transitions and reduce flicker.
+##### Best Practices and Common Mistakes Avoided
 
-### Best Practices Followed
-
-1. Used the `map()` function for precise value mapping.
-2. Avoided inline calculations within the `analogWrite` function.
-3. Employed descriptive variable names to improve code readability.
+1. Utilized `map()` function for accurate mapping.
+2. Calculations separated from `analogWrite()` function.
+3. Used meaningful variable names.
 4. Replaced "magic numbers" with well-named constants.
-5. Ensured the correct number of components were used in the circuit.
+5. Ensured the correct number of components for the task.
 
-### Additional Hardware Filtering
+#### Additional Measures: Hardware Filtering
 
-To combat signal noise and further smooth out the LED's flickering, I added capacitors between the VCC and GND terminals of the potentiometers. This hardware-level filter significantly improved performance.
+- Capacitors added between the VCC and GND of potentiometers for hardware-level noise reduction.
