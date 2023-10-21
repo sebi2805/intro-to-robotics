@@ -15,7 +15,7 @@
 - **RGB LED**: 1
 - **Potentiometers**: 4 (extra one for minimal signal value implementation)
 - **Resistors and Wires**: 330Ω resistors and necessary wiring.
-  ![My Hardware Setup](Resources/Images/RGB-setup.jpeg)
+  ![Hardware Setup](/Resources/Images/RGB-setup.jpeg)
 
 #### Technical Highlights
 

@@ -55,6 +55,7 @@ The primary goal of this homework is to set up the development environment for t
 - **RGB LED**: 1
 - **Potentiometers**: 4 (extra one for minimal signal value implementation)
 - **Resistors and Wires**: 330Ω resistors and necessary wiring.
+  ![Hardware Setup](/Resources/Images/RGB-setup.jpeg)
 
 #### Technical Highlights
 
