@@ -58,37 +58,51 @@ const int debounceDelay = 50; // 50 ms
 
 // }
 
-class ControlPanel
+class FlickerLed
 {
-private:
+protected:
   int ledPin;
-  bool isStationary;
   int lastFlickerTime;
   bool flickerValue;
 
 public:
-  ControlPanel(int ledPin)
+  FlickerLed(int ledPin)
   {
     this->ledPin = ledPin;
-    this->isStationary = true;
+    pinMode(ledPin, OUTPUT);
     this->lastFlickerTime = 0;
     this->flickerValue = false;
-    pinMode(ledPin, OUTPUT);
+  }
+  void update()
+  {
+    if (millis() - lastFlickerTime > 200)
+    {
+      flickerValue = !flickerValue;
+      lastFlickerTime = millis();
+      digitalWrite(ledPin, flickerValue);
+    }
+  }
+};
+
+class ControlPanel : public FlickerLed
+{
+private:
+  bool isStationary;
+
+public:
+  ControlPanel(int ledPin) : FlickerLed(ledPin)
+  {
+    this->isStationary = true;
   }
   void update()
   {
     if (isStationary)
     {
-      digitalWrite(PIN_CONTROLLED_LED, HIGH);
+      digitalWrite(ledPin, HIGH);
     }
     else
     {
-      if (millis() - lastFlickerTime > 100)
-      {
-        flickerValue = !flickerValue;
-        lastFlickerTime = millis();
-        digitalWrite(PIN_CONTROLLED_LED, flickerValue);
-      }
+      FlickerLed::update();
     }
   }
   void toggleMode()
@@ -96,21 +110,19 @@ public:
     isStationary = !isStationary;
   }
 };
+
 ControlPanel panel(PIN_CONTROLLED_LED);
 
-class Floor
+class FloorControl : public FlickerLed
 {
 public:
   int buttonPin;
-  int ledPin;
 
 public:
-  Floor(int buttonPin, int ledPin)
+  FloorControl(int buttonPin, int ledPin) : FlickerLed(ledPin)
   {
     this->buttonPin = buttonPin;
-    this->ledPin = ledPin;
     pinMode(buttonPin, INPUT_PULLUP);
-    pinMode(ledPin, OUTPUT);
   }
   bool read()
   {
@@ -120,11 +132,16 @@ public:
   {
     digitalWrite(ledPin, value);
   }
+  void closeDoors()
+  {
+    Serial.println("closing doors");
+    FlickerLed::update();
+  }
 };
 
-Floor floor1(PIN_FLOOR_1_BUTTON, PIN_FLOOR_1_LED);
-Floor floor2(PIN_FLOOR_2_BUTTON, PIN_FLOOR_2_LED);
-Floor floor3(PIN_FLOOR_3_BUTTON, PIN_FLOOR_3_LED);
+FloorControl floor1(PIN_FLOOR_1_BUTTON, PIN_FLOOR_1_LED);
+FloorControl floor2(PIN_FLOOR_2_BUTTON, PIN_FLOOR_2_LED);
+FloorControl floor3(PIN_FLOOR_3_BUTTON, PIN_FLOOR_3_LED);
 
 class Elevator
 {
@@ -132,12 +149,13 @@ private:
   int currentFloor;
   int targetFloor;
   bool isMoving;
+  bool closingDoors;
   unsigned long lastElevatorMoveTime;
-  Floor *floors[3];
+  FloorControl *floors[3];
   ControlPanel *panel;
 
 public:
-  Elevator(Floor *floor1, Floor *floor2, Floor *floor3, ControlPanel *_panel)
+  Elevator(FloorControl *floor1, FloorControl *floor2, FloorControl *floor3, ControlPanel *_panel)
   {
     currentFloor = 0;
     targetFloor = 0;
@@ -147,10 +165,10 @@ public:
     panel = _panel;
     lastElevatorMoveTime = 0;
     isMoving = false;
+    closingDoors = false;
   }
   void update()
   {
-    Serial.println(isMoving ? "is moving" : "is not moving");
     if (!isMoving)
     {
 
@@ -159,25 +177,27 @@ public:
         // in this order we also guarantee that the first floor has priority
         if (floors[i]->read())
         {
-          Serial.println(floors[i]->read());
-          Serial.println("this i:" + String(i));
           targetFloor = i;
         }
         if (targetFloor != currentFloor)
         {
           isMoving = true;
+          closingDoors = true;
           panel->toggleMode();
           lastElevatorMoveTime = millis();
-
         }
+      }
+    }
+    else if (closingDoors)
+    {
+      if (millis() - lastElevatorMoveTime > 1000)
+      {
+        closingDoors = false;
+        lastElevatorMoveTime = millis();
       }
     }
     else
     {
-
-      Serial.println("millis" + String(millis()));
-      Serial.println("last" + String(lastElevatorMoveTime));
-      Serial.println("diff" + String(millis() - lastElevatorMoveTime));
 
       if (millis() - lastElevatorMoveTime > 2000)
       {
@@ -189,8 +209,6 @@ public:
         {
           currentFloor--;
         }
-        Serial.println(currentFloor);
-        Serial.println(targetFloor);
         if (currentFloor == targetFloor)
         {
           isMoving = false;
@@ -206,7 +224,16 @@ public:
   {
     for (int i = 0; i < 3; i++)
     {
-      floors[i]->write(i == currentFloor);
+      if (closingDoors)
+      {
+        floors[currentFloor]->closeDoors();
+      }
+      else if (i == currentFloor)
+      {
+        floors[i]->write(true);
+      }
+      else
+        floors[i]->write(false);
     }
     panel->update();
   }
