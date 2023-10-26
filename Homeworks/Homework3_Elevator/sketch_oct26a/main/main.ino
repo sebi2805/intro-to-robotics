@@ -9,7 +9,14 @@ const int PIN_FLOOR_3_LED = 10;
 const int PIN_BUZZER = 11;
 const int PIN_CONTROLLED_LED = 12;
 
-const int debounceDelay = 50; // 50 ms
+const int debounceDelay = 100; // 100 ms
+
+enum ElevatorState
+{
+  CLOSING_DOORS,
+  MOVING,
+  STATIONARY
+};
 
 // class Elevator
 // {
@@ -57,23 +64,28 @@ const int debounceDelay = 50; // 50 ms
 //   }
 
 // }
+class Updatable
+{
+public:
+  virtual void update() = 0;
+};
 
-class FlickerLed
+class FlickerLed : public Updatable
 {
 protected:
   int ledPin;
-  int lastFlickerTime;
+  unsigned long lastFlickerTime;
   bool flickerValue;
 
 public:
   FlickerLed(int ledPin)
   {
     this->ledPin = ledPin;
-    pinMode(ledPin, OUTPUT);
     this->lastFlickerTime = 0;
     this->flickerValue = false;
+    pinMode(ledPin, OUTPUT);
   }
-  void update()
+  void update() override
   {
     if (millis() - lastFlickerTime > 200)
     {
@@ -88,20 +100,24 @@ class ControlPanel : public FlickerLed
 {
 private:
   bool isStationary;
+  int buzzerPin;
 
 public:
-  ControlPanel(int ledPin) : FlickerLed(ledPin)
+  ControlPanel(int ledPin, int buzzerPin) : FlickerLed(ledPin)
   {
     this->isStationary = true;
+    this->buzzerPin = buzzerPin;
   }
-  void update()
+  void update() override
   {
     if (isStationary)
     {
       digitalWrite(ledPin, HIGH);
+      digitalWrite(buzzerPin, LOW);
     }
     else
     {
+      digitalWrite(ledPin, HIGH);
       FlickerLed::update();
     }
   }
@@ -111,22 +127,37 @@ public:
   }
 };
 
-ControlPanel panel(PIN_CONTROLLED_LED);
+ControlPanel panel(PIN_CONTROLLED_LED, PIN_BUZZER);
 
 class FloorControl : public FlickerLed
 {
-public:
+private:
   int buttonPin;
+  bool lastReading;
+  unsigned long lastDebounceTime;
 
 public:
   FloorControl(int buttonPin, int ledPin) : FlickerLed(ledPin)
   {
     this->buttonPin = buttonPin;
+    this->lastDebounceTime = 0;
+    lastReading = false;
     pinMode(buttonPin, INPUT_PULLUP);
   }
   bool read()
   {
-    return !digitalRead(buttonPin);
+    bool reading = !digitalRead(buttonPin);
+
+    if (reading != lastReading)
+    {
+      if ((millis() - lastDebounceTime) > debounceDelay)
+      {
+        lastReading = reading;
+         lastDebounceTime = millis();
+      }
+    }
+
+    return lastReading;
   }
   void write(bool value)
   {
@@ -134,7 +165,6 @@ public:
   }
   void closeDoors()
   {
-    Serial.println("closing doors");
     FlickerLed::update();
   }
 };
@@ -143,13 +173,12 @@ FloorControl floor1(PIN_FLOOR_1_BUTTON, PIN_FLOOR_1_LED);
 FloorControl floor2(PIN_FLOOR_2_BUTTON, PIN_FLOOR_2_LED);
 FloorControl floor3(PIN_FLOOR_3_BUTTON, PIN_FLOOR_3_LED);
 
-class Elevator
+class Elevator : public Updatable
 {
 private:
   int currentFloor;
   int targetFloor;
-  bool isMoving;
-  bool closingDoors;
+  ElevatorState state;
   unsigned long lastElevatorMoveTime;
   FloorControl *floors[3];
   ControlPanel *panel;
@@ -164,67 +193,81 @@ public:
     floors[2] = floor3;
     panel = _panel;
     lastElevatorMoveTime = 0;
-    isMoving = false;
-    closingDoors = false;
+    state = ElevatorState::STATIONARY;
   }
-  void update()
+  void update() override
   {
-    if (!isMoving)
-    {
 
-      for (int i = 0; i < 3; i++)
-      {
-        // in this order we also guarantee that the first floor has priority
-        if (floors[i]->read())
-        {
-          targetFloor = i;
-        }
-        if (targetFloor != currentFloor)
-        {
-          isMoving = true;
-          closingDoors = true;
-          panel->toggleMode();
-          lastElevatorMoveTime = millis();
-        }
-      }
-    }
-    else if (closingDoors)
+    switch (state)
     {
-      if (millis() - lastElevatorMoveTime > 1000)
-      {
-        closingDoors = false;
-        lastElevatorMoveTime = millis();
-      }
-    }
-    else
-    {
-
-      if (millis() - lastElevatorMoveTime > 2000)
-      {
-        if (currentFloor < targetFloor)
-        {
-          currentFloor++;
-        }
-        else
-        {
-          currentFloor--;
-        }
-        if (currentFloor == targetFloor)
-        {
-          isMoving = false;
-          panel->toggleMode();
-        }
-        lastElevatorMoveTime = millis();
-      }
+    case ElevatorState::STATIONARY:
+      read();
+      break;
+    case ElevatorState::CLOSING_DOORS:
+      closeDoors();
+      break;
+    case ElevatorState::MOVING:
+      moveElevator();
+      break;
+    default:
+      break;
     }
     write();
+  }
+
+  void closeDoors()
+  {
+    if (millis() - lastElevatorMoveTime > 1000)
+    {
+      state = ElevatorState::MOVING;
+      lastElevatorMoveTime = millis();
+    }
+  }
+
+  void moveElevator()
+  {
+    if (millis() - lastElevatorMoveTime > 2000)
+    {
+      if (currentFloor < targetFloor)
+      {
+        currentFloor++;
+      }
+      else
+      {
+        currentFloor--;
+      }
+      if (currentFloor == targetFloor)
+      {
+        state = ElevatorState::STATIONARY;
+        panel->toggleMode();
+      }
+      lastElevatorMoveTime = millis();
+    }
+  }
+
+  void read()
+  {
+    for (int i = 0; i < 3; i++)
+    {
+      if (floors[i]->read())
+      {
+        targetFloor = i;
+      }
+      if (targetFloor != currentFloor)
+      {
+        state = ElevatorState::CLOSING_DOORS;
+        panel->toggleMode();
+        lastElevatorMoveTime = millis();
+      }
+    }
   }
 
   void write()
   {
     for (int i = 0; i < 3; i++)
     {
-      if (closingDoors)
+
+      if (state == ElevatorState::CLOSING_DOORS)
       {
         floors[currentFloor]->closeDoors();
       }
