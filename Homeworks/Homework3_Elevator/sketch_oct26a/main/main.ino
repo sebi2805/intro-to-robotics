@@ -132,7 +132,7 @@ private:
   int currentFloor;
   int targetFloor;
   bool isMoving;
-  int lastElevatorMoveTime;
+  unsigned long lastElevatorMoveTime;
   Floor *floors[3];
   ControlPanel *panel;
 
@@ -153,7 +153,7 @@ public:
     Serial.println(isMoving ? "is moving" : "is not moving");
     if (!isMoving)
     {
-     
+
       for (int i = 0; i < 3; i++)
       {
         // in this order we also guarantee that the first floor has priority
@@ -162,18 +162,19 @@ public:
           Serial.println(floors[i]->read());
           Serial.println("this i:" + String(i));
           targetFloor = i;
-          lastElevatorMoveTime = millis();
         }
         if (targetFloor != currentFloor)
         {
           isMoving = true;
           panel->toggleMode();
+          lastElevatorMoveTime = millis();
+
         }
       }
     }
     else
     {
-      
+
       Serial.println("millis" + String(millis()));
       Serial.println("last" + String(lastElevatorMoveTime));
       Serial.println("diff" + String(millis() - lastElevatorMoveTime));
