@@ -1,14 +1,20 @@
-const int numberOfFloors = 3;
+const int NUMBER_OF_FLOORS = 3;
 
-const int PIN_FLOOR_BUTTON[numberOfFloors] = {2, 3, 4};
-const int PIN_FLOOR_LED[numberOfFloors] = {8, 9, 10};
+// THE ORDER OF PINS IS IMPORTANT
+// I WILL USE THESE PINS TO INITIALIZE THE FLOOR BUTTONS AND LEDS
+const int PIN_FLOOR_BUTTON[NUMBER_OF_FLOORS] = {2, 3, 4};
+const int PIN_FLOOR_LED[NUMBER_OF_FLOORS] = {8, 9, 10};
 
+// I WILL USE THESE PINS TO INITIALIZE THE CONTROL PANEL
+// THE CONTROL PANEL HAS A LED AND A BUZZER TO INDICATE THE STATE OF THE ELEVATOR
 const int PIN_BUZZER = 11;
 const int PIN_CONTROLLED_LED = 12;
 
-const int debounceDelay = 100;       // 100 ms
-const int doorsOperationTime = 1000; // 1 second
+const int DEBOUNCE_DELAY = 100; // 100 ms
+// FOR EITHER OPENING OR CLOSING DOORS THE TIME IS THE SAME
+const int DOORS_OPERATING_TIME = 1000; // 1 second
 
+// THE FREQUENCIES OF THE TONES ARE ARBITRARY
 const int CLOSING_TONE_FREQ = 1000;
 const int ARRIVAL_TONE_FREQ = 2000;
 const int MOVING_TONE_FREQ = 1500;
@@ -20,10 +26,13 @@ enum ElevatorState
   STATIONARY
 };
 
+// TO KEEP TRACK OF THE PRESSES OF THE BUTTONS
+// IT DOESNT MATTER HOW MANY TIMES A USER PRESSES THE SAME LEVEL BUTTON
+// THAT IS WHY I MAKE SURE I KEEP THEM UNIQUE AND ALSO IN THE ORDER THEY WERE PRESSED
 class FloorQueue
 {
 private:
-  int queue[numberOfFloors];
+  int queue[NUMBER_OF_FLOORS];
   int front;
   int rear;
 
@@ -32,7 +41,7 @@ public:
 
   bool isFull()
   {
-    return (rear + 1) % numberOfFloors == front;
+    return (rear + 1) % NUMBER_OF_FLOORS == front;
   }
 
   bool isEmpty()
@@ -46,7 +55,7 @@ public:
     {
       return false;
     }
-    for (int i = front; i != rear; i = (i + 1) % numberOfFloors)
+    for (int i = front; i != rear; i = (i + 1) % NUMBER_OF_FLOORS)
     {
       if (queue[i] == floor)
       {
@@ -66,7 +75,7 @@ public:
     {
       front = 0;
     }
-    rear = (rear + 1) % numberOfFloors;
+    rear = (rear + 1) % NUMBER_OF_FLOORS;
     queue[rear] = floor;
   }
 
@@ -83,12 +92,13 @@ public:
     }
     else
     {
-      front = (front + 1) % numberOfFloors;
+      front = (front + 1) % NUMBER_OF_FLOORS;
     }
     return floor;
   }
 };
 
+// JUST AN ABSTRACT CLASS
 class Updatable
 {
 public:
@@ -121,6 +131,8 @@ public:
   }
 };
 
+// IN MY VISION A CONTROL PANEL IS INSIDE THE ELEVATOR, SO IT IS A SPEAKER WITH A LED THAT SHOWS
+// THE PEOPLE INSIDE WHAT TO DO
 class ControlPanel : public FlickerLed
 {
 private:
@@ -151,12 +163,12 @@ public:
   }
   void playArrivalTone()
   {
-    tone(buzzerPin, ARRIVAL_TONE_FREQ, doorsOperationTime);
+    tone(buzzerPin, ARRIVAL_TONE_FREQ, DOORS_OPERATING_TIME);
   }
 
   void playClosingTone()
   {
-    tone(buzzerPin, CLOSING_TONE_FREQ, doorsOperationTime);
+    tone(buzzerPin, CLOSING_TONE_FREQ, DOORS_OPERATING_TIME);
   }
 
   void startMovingTone()
@@ -170,7 +182,9 @@ public:
   }
 };
 
-class FloorControl : public FlickerLed
+// ON THE OTHER HAND, A FLOOR CONTROL PANEL IS OUTSIDE THE ELEVATOR, SO IT IS JUST A BUTTON AND A LED
+// SO THE USER CAN SEE IF IT HAS ARRIVED AND CALL IT
+class FloorControlPanel : public FlickerLed
 {
 private:
   int buttonPin;
@@ -178,7 +192,7 @@ private:
   unsigned long lastDebounceTime;
 
 public:
-  FloorControl(int buttonPin, int ledPin) : FlickerLed(ledPin)
+  FloorControlPanel(int buttonPin, int ledPin) : FlickerLed(ledPin)
   {
     this->buttonPin = buttonPin;
     this->lastDebounceTime = 0;
@@ -191,7 +205,7 @@ public:
 
     if (reading != lastReading)
     {
-      if ((millis() - lastDebounceTime) > debounceDelay)
+      if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY)
       {
         lastReading = reading;
         lastDebounceTime = millis();
@@ -210,24 +224,30 @@ public:
   }
 };
 
+// THE ELEVATOR IS THE MAIN CLASS, IT HAS A CONTROL PANEL AND A FLOOR CONTROL PANEL
 class Elevator : public Updatable
 {
 private:
+  // PRETTY OBVIOUS
   int currentFloor;
   int targetFloor;
   ElevatorState state;
+
   unsigned long lastElevatorMoveTime;
   unsigned long lastElevatorOpeningTime;
-  FloorControl *floors[numberOfFloors];
+
+  // THE GADGETS
+  FloorControlPanel *floors[NUMBER_OF_FLOORS];
   ControlPanel *panel;
+
   FloorQueue floorQueue;
 
 public:
-  Elevator(FloorControl *_floors[numberOfFloors], ControlPanel *_panel)
+  Elevator(FloorControlPanel *_floors[NUMBER_OF_FLOORS], ControlPanel *_panel)
   {
     currentFloor = 0;
     targetFloor = 0;
-    for (int i = 0; i < numberOfFloors; i++)
+    for (int i = 0; i < NUMBER_OF_FLOORS; i++)
     {
       floors[i] = _floors[i];
     }
@@ -259,7 +279,7 @@ public:
 
   void closeDoors()
   {
-    if (millis() - lastElevatorMoveTime > doorsOperationTime)
+    if (millis() - lastElevatorMoveTime > DOORS_OPERATING_TIME)
     {
       state = ElevatorState::MOVING;
       panel->startMovingTone();
@@ -269,7 +289,7 @@ public:
 
   void moveElevator()
   {
-    if (millis() - lastElevatorMoveTime > doorsOperationTime)
+    if (millis() - lastElevatorMoveTime > DOORS_OPERATING_TIME)
     {
       if (currentFloor < targetFloor)
       {
@@ -295,7 +315,7 @@ public:
 
   void read()
   {
-    for (int i = 0; i < numberOfFloors; i++)
+    for (int i = 0; i < NUMBER_OF_FLOORS; i++)
     {
       if (floors[i]->read())
       {
@@ -303,11 +323,12 @@ public:
       }
     }
 
-    if (millis() - lastElevatorOpeningTime > doorsOperationTime * 2
+    // MAYBE YOU ARE ASKING WHY DOUBLE THE TIME? BCS THE DOORS ARE OPENING AND CLOSING
+    if (millis() - lastElevatorOpeningTime > DOORS_OPERATING_TIME * 2
 
         && !floorQueue.isEmpty()
 
-        && (state == ElevatorState::STATIONARY || (state == ElevatorState::MOVING && currentFloor == targetFloor)))
+        && (state == ElevatorState::STATIONARY))
     {
       targetFloor = floorQueue.dequeue();
       if (targetFloor != currentFloor)
@@ -323,7 +344,7 @@ public:
   void write()
   {
     Serial.println(currentFloor);
-    for (int i = 0; i < numberOfFloors; i++)
+    for (int i = 0; i < NUMBER_OF_FLOORS; i++)
     {
       if (state == ElevatorState::CLOSING_DOORS)
       {
@@ -344,11 +365,11 @@ Elevator *elevator;
 
 void setup()
 {
-  FloorControl *floors[numberOfFloors];
+  FloorControlPanel *floors[NUMBER_OF_FLOORS];
 
-  for (int i = 0; i < numberOfFloors; i++)
+  for (int i = 0; i < NUMBER_OF_FLOORS; i++)
   {
-    floors[i] = new FloorControl(PIN_FLOOR_BUTTON[i], PIN_FLOOR_LED[i]);
+    floors[i] = new FloorControlPanel(PIN_FLOOR_BUTTON[i], PIN_FLOOR_LED[i]);
   }
 
   ControlPanel panel(PIN_CONTROLLED_LED, PIN_BUZZER);
@@ -359,5 +380,6 @@ void setup()
 void loop()
 {
   elevator->update();
+  // I use this display just so I dont broke the arduino
   delay(10);
 }
