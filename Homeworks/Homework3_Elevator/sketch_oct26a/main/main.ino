@@ -1,15 +1,17 @@
-const int PIN_FLOOR_1_BUTTON = 2;
-const int PIN_FLOOR_2_BUTTON = 3;
-const int PIN_FLOOR_3_BUTTON = 4;
+const int numberOfFloors = 3;
 
-const int PIN_FLOOR_1_LED = 8;
-const int PIN_FLOOR_2_LED = 9;
-const int PIN_FLOOR_3_LED = 10;
+const int PIN_FLOOR_BUTTON[numberOfFloors] = {2, 3, 4};
+const int PIN_FLOOR_LED[numberOfFloors] = {8, 9, 10};
 
 const int PIN_BUZZER = 11;
 const int PIN_CONTROLLED_LED = 12;
 
-const int debounceDelay = 100; // 100 ms
+const int debounceDelay = 100;       // 100 ms
+const int doorsOperationTime = 1000; // 1 second
+
+const int CLOSING_TONE_FREQ = 1000;
+const int ARRIVAL_TONE_FREQ = 2000;
+const int MOVING_TONE_FREQ = 1500;
 
 enum ElevatorState
 {
@@ -18,52 +20,6 @@ enum ElevatorState
   STATIONARY
 };
 
-// class Elevator
-// {
-// private:
-//   int currentFloor;
-//   int targetFloor;
-//   Floor floors[3];
-
-// public:
-//   Elevator(
-//       int floor1ButtonPin, int floor1LedPin,
-//       int floor2ButtonPin, int floor2LedPin,
-//       int floor3ButtonPin, int floor3LedPin)
-//   {
-//     currentFloor = 0;
-//     targetFloor = 0;
-//     floors[0] = Floor(floor1ButtonPin, floor1LedPin);
-//     floors[1] = Floor(floor2ButtonPin, floor2LedPin);
-//     floors[2] = Floor(floor3ButtonPin, floor3LedPin);
-//   }
-//   void update()
-//   {
-//     for (int i = 0; i < 3; i++)
-//     {
-//       if (floors[i].read())
-//       {
-//         targetFloor = i;
-//       }
-//     }
-//     if (currentFloor != targetFloor)
-//     {
-//       if (currentFloor < targetFloor)
-//       {
-//         currentFloor++;
-//       }
-//       else
-//       {
-//         currentFloor--;
-//       }
-//     }
-//     for (int i = 0; i < 3; i++)
-//     {
-//       digitalWrite(floors[i].ledPin, i == currentFloor);
-//     }
-//   }
-
-// }
 class Updatable
 {
 public:
@@ -107,17 +63,16 @@ public:
   {
     this->isStationary = true;
     this->buzzerPin = buzzerPin;
+    pinMode(buzzerPin, OUTPUT);
   }
   void update() override
   {
     if (isStationary)
     {
       digitalWrite(ledPin, HIGH);
-      digitalWrite(buzzerPin, LOW);
     }
     else
     {
-      digitalWrite(ledPin, HIGH);
       FlickerLed::update();
     }
   }
@@ -125,9 +80,26 @@ public:
   {
     isStationary = !isStationary;
   }
-};
+  void playArrivalTone()
+  {
+    tone(buzzerPin, ARRIVAL_TONE_FREQ, doorsOperationTime);
+  }
 
-ControlPanel panel(PIN_CONTROLLED_LED, PIN_BUZZER);
+  void playClosingTone()
+  {
+    tone(buzzerPin, CLOSING_TONE_FREQ, doorsOperationTime);
+  }
+
+  void startMovingTone()
+  {
+    tone(buzzerPin, MOVING_TONE_FREQ);
+  }
+
+  void stopTone()
+  {
+    noTone(buzzerPin);
+  }
+};
 
 class FloorControl : public FlickerLed
 {
@@ -153,7 +125,7 @@ public:
       if ((millis() - lastDebounceTime) > debounceDelay)
       {
         lastReading = reading;
-         lastDebounceTime = millis();
+        lastDebounceTime = millis();
       }
     }
 
@@ -169,10 +141,6 @@ public:
   }
 };
 
-FloorControl floor1(PIN_FLOOR_1_BUTTON, PIN_FLOOR_1_LED);
-FloorControl floor2(PIN_FLOOR_2_BUTTON, PIN_FLOOR_2_LED);
-FloorControl floor3(PIN_FLOOR_3_BUTTON, PIN_FLOOR_3_LED);
-
 class Elevator : public Updatable
 {
 private:
@@ -180,17 +148,18 @@ private:
   int targetFloor;
   ElevatorState state;
   unsigned long lastElevatorMoveTime;
-  FloorControl *floors[3];
+  FloorControl *floors[numberOfFloors];
   ControlPanel *panel;
 
 public:
-  Elevator(FloorControl *floor1, FloorControl *floor2, FloorControl *floor3, ControlPanel *_panel)
+  Elevator(FloorControl *_floors[numberOfFloors], ControlPanel *_panel)
   {
     currentFloor = 0;
     targetFloor = 0;
-    floors[0] = floor1;
-    floors[1] = floor2;
-    floors[2] = floor3;
+    for (int i = 0; i < numberOfFloors; i++)
+    {
+      floors[i] = _floors[i];
+    }
     panel = _panel;
     lastElevatorMoveTime = 0;
     state = ElevatorState::STATIONARY;
@@ -217,9 +186,10 @@ public:
 
   void closeDoors()
   {
-    if (millis() - lastElevatorMoveTime > 1000)
+    if (millis() - lastElevatorMoveTime > doorsOperationTime)
     {
       state = ElevatorState::MOVING;
+      panel->startMovingTone();
       lastElevatorMoveTime = millis();
     }
   }
@@ -239,6 +209,8 @@ public:
       if (currentFloor == targetFloor)
       {
         state = ElevatorState::STATIONARY;
+        panel->stopTone();
+        panel->playArrivalTone();
         panel->toggleMode();
       }
       lastElevatorMoveTime = millis();
@@ -247,7 +219,7 @@ public:
 
   void read()
   {
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < numberOfFloors; i++)
     {
       if (floors[i]->read())
       {
@@ -256,6 +228,7 @@ public:
       if (targetFloor != currentFloor)
       {
         state = ElevatorState::CLOSING_DOORS;
+        panel->playClosingTone();
         panel->toggleMode();
         lastElevatorMoveTime = millis();
       }
@@ -264,7 +237,7 @@ public:
 
   void write()
   {
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < numberOfFloors; i++)
     {
 
       if (state == ElevatorState::CLOSING_DOORS)
@@ -282,14 +255,24 @@ public:
   }
 };
 
-Elevator elevator(&floor1, &floor2, &floor3, &panel);
+Elevator *elevator;
+
 void setup()
 {
+  FloorControl *floors[numberOfFloors];
+
+  for (int i = 0; i < numberOfFloors; i++)
+  {
+    floors[i] = new FloorControl(PIN_FLOOR_BUTTON[i], PIN_FLOOR_LED[i]);
+  }
+
+  ControlPanel panel(PIN_CONTROLLED_LED, PIN_BUZZER);
+  elevator = new Elevator(floors, &panel);
   Serial.begin(9600);
 }
 
 void loop()
 {
-  elevator.update();
+  elevator->update();
   delay(10);
 }
