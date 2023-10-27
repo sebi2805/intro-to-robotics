@@ -20,6 +20,75 @@ enum ElevatorState
   STATIONARY
 };
 
+class FloorQueue
+{
+private:
+  int queue[numberOfFloors];
+  int front;
+  int rear;
+
+public:
+  FloorQueue() : front(-1), rear(-1) {}
+
+  bool isFull()
+  {
+    return (rear + 1) % numberOfFloors == front;
+  }
+
+  bool isEmpty()
+  {
+    return front == -1;
+  }
+
+  bool contains(int floor)
+  {
+    if (isEmpty())
+    {
+      return false;
+    }
+    for (int i = front; i != rear; i = (i + 1) % numberOfFloors)
+    {
+      if (queue[i] == floor)
+      {
+        return true;
+      }
+    }
+    return queue[rear] == floor;
+  }
+
+  void enqueue(int floor)
+  {
+    if (isFull() || contains(floor))
+    {
+      return;
+    }
+    if (isEmpty())
+    {
+      front = 0;
+    }
+    rear = (rear + 1) % numberOfFloors;
+    queue[rear] = floor;
+  }
+
+  int dequeue()
+  {
+    if (isEmpty())
+    {
+      return -1;
+    }
+    int floor = queue[front];
+    if (front == rear)
+    {
+      front = rear = -1;
+    }
+    else
+    {
+      front = (front + 1) % numberOfFloors;
+    }
+    return floor;
+  }
+};
+
 class Updatable
 {
 public:
@@ -148,8 +217,10 @@ private:
   int targetFloor;
   ElevatorState state;
   unsigned long lastElevatorMoveTime;
+  unsigned long lastElevatorOpeningTime;
   FloorControl *floors[numberOfFloors];
   ControlPanel *panel;
+  FloorQueue floorQueue;
 
 public:
   Elevator(FloorControl *_floors[numberOfFloors], ControlPanel *_panel)
@@ -162,15 +233,15 @@ public:
     }
     panel = _panel;
     lastElevatorMoveTime = 0;
+    lastElevatorOpeningTime = 0;
     state = ElevatorState::STATIONARY;
   }
   void update() override
   {
-
     switch (state)
     {
     case ElevatorState::STATIONARY:
-      read();
+      // in case I change my mind, bcs until now it was necessary to read single input, but wiht queue it is not
       break;
     case ElevatorState::CLOSING_DOORS:
       closeDoors();
@@ -181,6 +252,8 @@ public:
     default:
       break;
     }
+
+    read();
     write();
   }
 
@@ -196,7 +269,7 @@ public:
 
   void moveElevator()
   {
-    if (millis() - lastElevatorMoveTime > 2000)
+    if (millis() - lastElevatorMoveTime > doorsOperationTime)
     {
       if (currentFloor < targetFloor)
       {
@@ -206,13 +279,16 @@ public:
       {
         currentFloor--;
       }
+
       if (currentFloor == targetFloor)
       {
+        lastElevatorOpeningTime = millis();
         state = ElevatorState::STATIONARY;
         panel->stopTone();
         panel->playArrivalTone();
         panel->toggleMode();
       }
+
       lastElevatorMoveTime = millis();
     }
   }
@@ -223,13 +299,22 @@ public:
     {
       if (floors[i]->read())
       {
-        targetFloor = i;
+        floorQueue.enqueue(i);
       }
+    }
+
+    if (millis() - lastElevatorOpeningTime > doorsOperationTime * 2
+
+        && !floorQueue.isEmpty()
+
+        && (state == ElevatorState::STATIONARY || (state == ElevatorState::MOVING && currentFloor == targetFloor)))
+    {
+      targetFloor = floorQueue.dequeue();
       if (targetFloor != currentFloor)
       {
         state = ElevatorState::CLOSING_DOORS;
-        panel->playClosingTone();
         panel->toggleMode();
+        panel->playClosingTone();
         lastElevatorMoveTime = millis();
       }
     }
@@ -237,9 +322,9 @@ public:
 
   void write()
   {
+    Serial.println(currentFloor);
     for (int i = 0; i < numberOfFloors; i++)
     {
-
       if (state == ElevatorState::CLOSING_DOORS)
       {
         floors[currentFloor]->closeDoors();
