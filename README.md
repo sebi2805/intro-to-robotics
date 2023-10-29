@@ -81,9 +81,9 @@ The primary goal of this homework is to set up the development environment for t
 
 - Capacitors added between the VCC and GND of potentiometers for hardware-level noise reduction.
 
-## Completed Homework #4: Elevator Simulator
+## Completed Homework #3: Elevator Simulator
 
-### Deadline Met: (Date of Completion)
+### Deadline Met: 31rd October 2023
 
 ### [Showcase Video on YouTube](https://www.youtube.com/shorts/1ydJD84eGQU)
 
@@ -97,7 +97,7 @@ The primary goal of this homework is to set up the development environment for t
 
 - **LEDs**: At least 4 (3 for floors and 1 for the elevator's operational state)
 - **Buttons**: At least 3 (for floor calls)
-- **Buzzer**: 1 (optional for Computer Science, mandatory for CTI)
+- **Buzzer**: 1
 - **Resistors and Wires**: As needed
   ![Hardware Setup](/Resources/Images/elevator-setup.jpg)
 
