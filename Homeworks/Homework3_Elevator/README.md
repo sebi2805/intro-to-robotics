@@ -16,7 +16,7 @@
 - **Buttons**: At least 3 (for floor calls)
 - **Buzzer**: 1 (optional for Computer Science, mandatory for CTI)
 - **Resistors and Wires**: As needed
-  ![Hardware Setup](/Resources/Images/elevator-setup.jpeg)
+  ![Hardware Setup](/Resources/Images/elevator-setup.jpg)
 
 #### Technical Highlights
 
