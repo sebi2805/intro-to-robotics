@@ -1,7 +1,20 @@
-const int joystickPins[] = {A0, A1, 2};
+const int PIN_JOY_X = A0;
+const int PIN_JOY_Y = A1;
+const int PIN_JOY_BTN = 2;
+
+const int JOY_THRESHOLD = 100;
+const int JOY_CENTER = 512;
 
 const int displayPins[] = {4, 5, 6, 7, 8, 9, 10, 11};
 
+int currentSegment = 7;
+int checkedSegments[] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+const int BUZZER_PIN = 12;
+const int SHORT_PRESS_FREQ = 1000;    // Frequency for short press, in Hz
+const int LONG_PRESS_FREQ = 500;      // Frequency for long press, in Hz
+const int SHORT_PRESS_DURATION = 100; // Duration for short press, in ms
+const int LONG_PRESS_DURATION = 1000; // Duration for long press, in ms
 // Enum to represent each segment and a special value for N/A
 enum SegmentName
 {
@@ -46,247 +59,182 @@ Segment segmentsTable[] = {
     {g, a, d, NA, NA},
     {dp, NA, NA, c, NA}};
 
-class FlickerLed
+void flickerCurrentLed(int _pin)
 {
-protected:
-    int ledPin;
-    unsigned long lastFlickerTime;
-    bool flickerValue;
-    bool isChecked;
-    bool isSelected;
+    static unsigned long lastFlickerTime = 0;
+    static bool flickerValue = true;
+    unsigned long currentMillis = millis();
 
-public:
-    FlickerLed(int ledPin)
+    // Flicker every 500 milliseconds
+    if (currentMillis - lastFlickerTime > 200)
     {
-        this->ledPin = ledPin;
-        this->lastFlickerTime = 0;
-        this->flickerValue = true;
-        this->isChecked = false;
-        this->isSelected = false;
-        pinMode(ledPin, OUTPUT);
+        digitalWrite(displayPins[_pin], flickerValue);
+        lastFlickerTime = currentMillis;
+        flickerValue = !flickerValue;
     }
+}
 
-    void toggleCheck()
+void updateDisplay()
+{
+    for (int i = 0; i < 8; i++)
     {
-        isChecked = !isChecked;
-    }
-
-    void setIsSelected(bool _val)
-    {
-        isSelected = _val;
-    }
-    void update()
-    {
-        if (isChecked)
+        if (i == currentSegment)
         {
-            digitalWrite(ledPin, HIGH);
+            // Flicker the current segment
+            flickerCurrentLed(i);
         }
         else
         {
-            if (!isSelected)
-            {
-                digitalWrite(ledPin, LOW);
-            }
-            else if (millis() - lastFlickerTime > 200)
-            {
-                flickerValue = !flickerValue;
-                lastFlickerTime = millis();
-                digitalWrite(ledPin, flickerValue);
-            }
+            // Set the segment to the value from checkedSegments
+            digitalWrite(displayPins[i], checkedSegments[i] ? HIGH : LOW);
         }
     }
-};
+}
+volatile unsigned long pressStartTime = 0;
+volatile bool buttonPressed = false;
 
-class SevenSegmentDisplay
+void buttonISR()
 {
-protected:
-    FlickerLed *segments[8];
-    SegmentName currentSegment;
+    static unsigned long lastInterruptTime = 0;
+    unsigned long interruptTime = millis();
 
-public:
-    SevenSegmentDisplay(int segmentPins[8])
+    // Debounce logic
+    if (interruptTime - lastInterruptTime > 50)
     {
-
-        for (int i = 0; i < 8; i++)
+        if (digitalRead(PIN_JOY_BTN) == LOW) // Button pressed
         {
-            segments[i] = new FlickerLed(segmentPins[i]);
+            Serial.println("Button pressed");
+            pressStartTime = interruptTime;
+            buttonPressed = true;
         }
-        currentSegment = dp;
+        else if (buttonPressed) // Button released
+        {
+            unsigned long pressDuration = interruptTime - pressStartTime;
+            buttonPressed = false;
+
+            if (pressDuration < 1000)
+            { // Short press
+                checkedSegments[currentSegment] = !checkedSegments[currentSegment];
+                tone(BUZZER_PIN, SHORT_PRESS_FREQ, SHORT_PRESS_DURATION);
+            }
+            else
+            { // Long press
+                for (int i = 0; i < 8; i++)
+                {
+                    checkedSegments[i] = 0;
+                }
+                currentSegment = 7;
+                tone(BUZZER_PIN, LONG_PRESS_FREQ, LONG_PRESS_DURATION);
+            }
+        }
     }
+    lastInterruptTime = interruptTime;
+}
 
-    void moveSegment(Direction dir)
+Direction getDirection()
+{
+    int x = analogRead(PIN_JOY_X);
+    int y = analogRead(PIN_JOY_Y);
+
+    if (x < JOY_CENTER - JOY_THRESHOLD)
+        return Direction::LEFT;
+    else if (x > JOY_CENTER + JOY_THRESHOLD)
+        return Direction::RIGHT;
+    else if (y < JOY_CENTER - JOY_THRESHOLD)
+        return Direction::UP;
+    else if (y > JOY_CENTER + JOY_THRESHOLD)
+        return Direction::DOWN;
+    else
+        return Direction::NONE;
+}
+
+void moveSegment(Direction dir)
+{
+    static bool joyMoved = false;
+    Segment current = segmentsTable[currentSegment];
+    SegmentName nextSegment = NA;
+    if (!joyMoved)
     {
-        Segment current = segmentsTable[currentSegment];
-        SegmentName nextSegment = NA;
-
         if (dir == Direction::UP)
         {
-            Serial.println(current.up);
             nextSegment = current.up;
         }
         else if (dir == Direction::DOWN)
         {
-            Serial.println(current.down);
             nextSegment = current.down;
         }
         else if (dir == Direction::LEFT)
         {
-            Serial.println(current.left);
             nextSegment = current.left;
         }
         else if (dir == Direction::RIGHT)
         {
-            Serial.println(current.right);
             nextSegment = current.right;
         }
 
         if (nextSegment != NA)
         {
             currentSegment = nextSegment;
+            joyMoved = true;
         }
     }
-
-    void toggleSegment()
+    else if (dir == Direction::NONE)
     {
-        segments[currentSegment]->toggleCheck();
+        joyMoved = false;
     }
+}
 
-    void resetDisplay()
-    {
-        for (int i = 0; i < 8; i++)
-        {
-            segments[i]->setIsSelected(false);
-        }
-        currentSegment = dp;
-    }
-    void updateDisplay()
-    {
-        // Turn off all segments
-        for (int i = 0; i < 8; i++)
-        {
-            // Serial.println("Current" + String(currentSegment));
-            // Serial.println("Updating" + String(i == currentSegment));
-            segments[i]->setIsSelected(i == currentSegment);
-            segments[i]->update();
-        }
-
-        // Keep it off for half a second
-    }
-};
-
-class Joystick
+void update()
 {
-protected:
-    int PIN_JOY_X;
-    int PIN_JOY_Y;
-    int PIN_JOY_BUTTON;
+    Direction direction = getDirection();
 
-    const int JOY_THRESHOLD = 100;
-    const int JOY_CENTER = 512;
-    unsigned long lastButtonPressTime = 0;
-
-public:
-    Joystick(int pinX, int pinY, int pinButton) : PIN_JOY_X(pinX), PIN_JOY_Y(pinY), PIN_JOY_BUTTON(pinButton)
+    if (direction != Direction::NONE)
     {
-        pinMode(PIN_JOY_X, INPUT);
-        pinMode(PIN_JOY_Y, INPUT);
-        pinMode(PIN_JOY_BUTTON, INPUT_PULLUP);
-    }
 
-    Direction getDirection()
-    {
-        int x = analogRead(PIN_JOY_X);
-        int y = analogRead(PIN_JOY_Y);
-
-        if (x < JOY_CENTER - JOY_THRESHOLD)
-            return Direction::LEFT;
-        else if (x > JOY_CENTER + JOY_THRESHOLD)
-            return Direction::RIGHT;
-        else if (y < JOY_CENTER - JOY_THRESHOLD)
-            return Direction::UP;
-        else if (y > JOY_CENTER + JOY_THRESHOLD)
-            return Direction::DOWN;
-        else
-            return Direction::NONE;
-    }
-
-    // Function to handle button press using interrupts
-    static void handleButtonPress(callback_t callback)
-    {
-        static unsigned long lastInterruptTime = 0;
-        unsigned long interruptTime = millis();
-
-        // If interrupts come faster than 200ms, assume it's a bounce and ignore
-        if (interruptTime - lastInterruptTime > 200)
+        switch (direction)
         {
-            callback(); // This will call the passed-in callback function
+        case Direction::UP:
+            moveSegment(Direction::UP);
+            break;
+        case Direction::DOWN:
+            moveSegment(Direction::DOWN);
+            break;
+        case Direction::LEFT:
+            moveSegment(Direction::LEFT);
+            break;
+        case Direction::RIGHT:
+            moveSegment(Direction::RIGHT);
+            break;
+
+        default:
+            break;
         }
-        lastInterruptTime = interruptTime;
+        // You can add logic here to change the current segment based on the direction
     }
-
-    // Other methods for the Joystick class...
-};
-
-SevenSegmentDisplay *display;
-Joystick *controller;
-
-class Gameboard
-{
-public:
-    Gameboard(int segmentPins[8], int pinX, int pinY, int pinButton)
-    {
-        gameboard = new SevenSegmentDisplay(segmentPins);
-        controller = new Joystick(pinX, pinY, pinButton);
-    }
-    void update()
-    {
-        Direction direction = controller->getDirection();
-
-        if (direction != Direction::NONE)
-        {
-
-            switch (direction)
-            {
-            case Direction::UP:
-                Serial.println("UP");
-                gameboard->moveSegment(Direction::UP);
-                break;
-            case Direction::DOWN:
-                Serial.println("DOWN");
-                gameboard->moveSegment(Direction::DOWN);
-                break;
-            case Direction::LEFT:
-                Serial.println("LEFT");
-                gameboard->moveSegment(Direction::LEFT);
-                break;
-            case Direction::RIGHT:
-                Serial.println("RIGHT");
-                gameboard->moveSegment(Direction::RIGHT);
-                break;
-
-            default:
-                break;
-            }
-            gameboard->updateDisplay();
-            // You can add logic here to change the current segment based on the direction
-        }
-    }
-};
-
-Gameboard gameboard(displayPins, joystickPins[0], joystickPins[1], joystickPins[2]);
+    else
+        moveSegment(Direction::NONE);
+    updateDisplay();
+}
 
 void setup()
 {
     Serial.begin(9600); // Initialize the serial communication for debugging
     Serial.println("Elevator Controller Initialized");
+    pinMode(PIN_JOY_X, INPUT);
+    pinMode(PIN_JOY_Y, INPUT);
+    pinMode(PIN_JOY_BTN, INPUT_PULLUP);
+    pinMode(BUZZER_PIN, OUTPUT);
 
-    attachInterrupt(digitalPinToInterrupt(PIN_JOY_BUTTON), controller->handleButtonPress(), FALLING);
+    // Set the pin modes for the display pins
+    for (int i = 0; i < 8; i++)
+    {
+        pinMode(displayPins[i], OUTPUT);
+    }
+    attachInterrupt(digitalPinToInterrupt(PIN_JOY_BTN), buttonISR, CHANGE);
 }
 void loop()
 {
-    // Check the joystick movement
-    gameboard.update();
-    // Here you can add other logic like handling button presses or updating the display
 
+    update();
     delay(10); // Delay for a short period to make the output readable
 }
