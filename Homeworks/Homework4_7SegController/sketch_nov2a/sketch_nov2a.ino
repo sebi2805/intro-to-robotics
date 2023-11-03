@@ -1,8 +1,6 @@
-int joystickPins[] = {A0, A1, 2};
+const int joystickPins[] = {A0, A1, 2};
 
-int displayPins[] = {4, 5, 6, 7, 8, 9, 10, 11};
-
-typedef void (*callback_t)();
+const int displayPins[] = {4, 5, 6, 7, 8, 9, 10, 11};
 
 // Enum to represent each segment and a special value for N/A
 enum SegmentName
@@ -193,7 +191,6 @@ public:
         pinMode(PIN_JOY_X, INPUT);
         pinMode(PIN_JOY_Y, INPUT);
         pinMode(PIN_JOY_BUTTON, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(PIN_JOY_BUTTON), handleButtonPress, FALLING);
     }
 
     Direction getDirection()
@@ -230,16 +227,20 @@ public:
     // Other methods for the Joystick class...
 };
 
-class Gameboard : public SevenSegmentDisplay, public Joystick
+SevenSegmentDisplay *display;
+Joystick *controller;
+
+class Gameboard
 {
 public:
     Gameboard(int segmentPins[8], int pinX, int pinY, int pinButton)
-        : SevenSegmentDisplay(segmentPins), Joystick(pinX, pinY, pinButton)
     {
+        gameboard = new SevenSegmentDisplay(segmentPins);
+        controller = new Joystick(pinX, pinY, pinButton);
     }
     void update()
     {
-        Direction direction = controller.getDirection();
+        Direction direction = controller->getDirection();
 
         if (direction != Direction::NONE)
         {
@@ -248,25 +249,25 @@ public:
             {
             case Direction::UP:
                 Serial.println("UP");
-                gameboard.moveSegment(Direction::UP);
+                gameboard->moveSegment(Direction::UP);
                 break;
             case Direction::DOWN:
                 Serial.println("DOWN");
-                gameboard.moveSegment(Direction::DOWN);
+                gameboard->moveSegment(Direction::DOWN);
                 break;
             case Direction::LEFT:
                 Serial.println("LEFT");
-                gameboard.moveSegment(Direction::LEFT);
+                gameboard->moveSegment(Direction::LEFT);
                 break;
             case Direction::RIGHT:
                 Serial.println("RIGHT");
-                gameboard.moveSegment(Direction::RIGHT);
+                gameboard->moveSegment(Direction::RIGHT);
                 break;
 
             default:
                 break;
             }
-            gameboard.updateDisplay();
+            gameboard->updateDisplay();
             // You can add logic here to change the current segment based on the direction
         }
     }
@@ -278,6 +279,8 @@ void setup()
 {
     Serial.begin(9600); // Initialize the serial communication for debugging
     Serial.println("Elevator Controller Initialized");
+
+    attachInterrupt(digitalPinToInterrupt(PIN_JOY_BUTTON), controller->handleButtonPress(), FALLING);
 }
 void loop()
 {
