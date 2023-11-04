@@ -131,7 +131,7 @@ The primary goal of this homework is to set up the development environment for t
 
 ### Deadline Met: November 7th, 2023
 
-### [Showcase Video on YouTube](https://www.youtube.com/x)
+### [Showcase Video on YouTube](https://youtube.com/shorts/8kp4Yvexm8I?feature=share)
 
 #### Objectives Achieved
 
