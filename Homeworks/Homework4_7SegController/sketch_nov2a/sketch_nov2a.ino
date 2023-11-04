@@ -7,14 +7,6 @@ const int JOY_CENTER = 512;
 
 const int displayPins[] = {4, 5, 6, 7, 8, 9, 10, 11};
 
-int currentSegment = 7;
-int checkedSegments[] = {0, 0, 0, 0, 0, 0, 0, 0};
-
-const int BUZZER_PIN = 12;
-const int SHORT_PRESS_FREQ = 1000;    // Frequency for short press, in Hz
-const int LONG_PRESS_FREQ = 500;      // Frequency for long press, in Hz
-const int SHORT_PRESS_DURATION = 100; // Duration for short press, in ms
-const int LONG_PRESS_DURATION = 1000; // Duration for long press, in ms
 // Enum to represent each segment and a special value for N/A
 enum SegmentName
 {
@@ -28,6 +20,25 @@ enum SegmentName
     dp,
     NA = -1
 };
+
+int currentSegment = dp;
+int checkedSegments[] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+const int numberOfSegments = 8;
+
+const int longPressDuration = 1000;
+
+const int BUZZER_PIN = 12;
+const int SHORT_PRESS_FREQ = 1000;    // Frequency for short press, in Hz
+const int LONG_PRESS_FREQ = 500;      // Frequency for long press, in Hz
+const int SHORT_PRESS_DURATION = 100; // Duration for short press, in ms
+const int LONG_PRESS_DURATION = 1000; // Duration for long press, in ms
+
+const int flickerTime = 200;       // Flicker time in ms
+const int debounceButtonTime = 50; // Debounce time in ms
+
+volatile unsigned long pressStartTime = 0;
+volatile bool buttonPressed = false;
 
 // Define the structure for a segment
 struct Segment
@@ -66,7 +77,7 @@ void flickerCurrentLed(int _pin)
     unsigned long currentMillis = millis();
 
     // Flicker every 500 milliseconds
-    if (currentMillis - lastFlickerTime > 200)
+    if (currentMillis - lastFlickerTime > flickerTime)
     {
         digitalWrite(displayPins[_pin], flickerValue);
         lastFlickerTime = currentMillis;
@@ -76,7 +87,8 @@ void flickerCurrentLed(int _pin)
 
 void updateDisplay()
 {
-    for (int i = 0; i < 8; i++)
+
+    for (int i = 0; i < numberOfSegments; i++)
     {
         if (i == currentSegment)
         {
@@ -90,8 +102,6 @@ void updateDisplay()
         }
     }
 }
-volatile unsigned long pressStartTime = 0;
-volatile bool buttonPressed = false;
 
 void buttonISR()
 {
@@ -99,11 +109,10 @@ void buttonISR()
     unsigned long interruptTime = millis();
 
     // Debounce logic
-    if (interruptTime - lastInterruptTime > 50)
+    if (interruptTime - lastInterruptTime > debounceButtonTime)
     {
         if (digitalRead(PIN_JOY_BTN) == LOW) // Button pressed
         {
-            Serial.println("Button pressed");
             pressStartTime = interruptTime;
             buttonPressed = true;
         }
@@ -112,18 +121,18 @@ void buttonISR()
             unsigned long pressDuration = interruptTime - pressStartTime;
             buttonPressed = false;
 
-            if (pressDuration < 1000)
+            if (pressDuration < longPressDuration)
             { // Short press
                 checkedSegments[currentSegment] = !checkedSegments[currentSegment];
                 tone(BUZZER_PIN, SHORT_PRESS_FREQ, SHORT_PRESS_DURATION);
             }
             else
             { // Long press
-                for (int i = 0; i < 8; i++)
+                for (int i = 0; i < numberOfSegments; i++)
                 {
                     checkedSegments[i] = 0;
                 }
-                currentSegment = 7;
+                currentSegment = dp;
                 tone(BUZZER_PIN, LONG_PRESS_FREQ, LONG_PRESS_DURATION);
             }
         }
@@ -219,14 +228,13 @@ void update()
 void setup()
 {
     Serial.begin(9600); // Initialize the serial communication for debugging
-    Serial.println("Elevator Controller Initialized");
     pinMode(PIN_JOY_X, INPUT);
     pinMode(PIN_JOY_Y, INPUT);
     pinMode(PIN_JOY_BTN, INPUT_PULLUP);
     pinMode(BUZZER_PIN, OUTPUT);
 
     // Set the pin modes for the display pins
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < numberOfSegments; i++)
     {
         pinMode(displayPins[i], OUTPUT);
     }
