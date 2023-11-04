@@ -106,7 +106,9 @@ void updateDisplay()
 void buttonISR()
 {
     static unsigned long lastInterruptTime = 0;
-    unsigned long interruptTime = millis();
+    unsigned long interruptTime = micros();
+
+    // unsigned long interruptTime = millis();
 
     // Debounce logic
     if (interruptTime - lastInterruptTime > debounceButtonTime)
@@ -121,7 +123,7 @@ void buttonISR()
             unsigned long pressDuration = interruptTime - pressStartTime;
             buttonPressed = false;
 
-            if (pressDuration < longPressDuration)
+            if (pressDuration < longPressDuration * 1000)
             { // Short press
                 checkedSegments[currentSegment] = !checkedSegments[currentSegment];
                 tone(BUZZER_PIN, SHORT_PRESS_FREQ, SHORT_PRESS_DURATION);
