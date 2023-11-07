@@ -2,8 +2,8 @@ const int PIN_JOY_X = A0;
 const int PIN_JOY_Y = A1;
 const int PIN_JOY_BTN = 2;
 
-const int JOY_THRESHOLD = 100;
-const int JOY_CENTER = 512;
+const int joyThreshold = 100;
+const int joyCenter = 512;
 
 const int displayPins[] = {4, 5, 6, 7, 8, 9, 10, 11};
 
@@ -26,13 +26,11 @@ int checkedSegments[] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 const int numberOfSegments = 8;
 
-const int longPressDuration = 1000;
-
 const int BUZZER_PIN = 12;
-const int SHORT_PRESS_FREQ = 1000;    // Frequency for short press, in Hz
-const int LONG_PRESS_FREQ = 500;      // Frequency for long press, in Hz
-const int SHORT_PRESS_DURATION = 100; // Duration for short press, in ms
-const int LONG_PRESS_DURATION = 1000; // Duration for long press, in ms
+const int shortPressFreq = 1000;    // Frequency for short press, in Hz
+const int longPressFreq = 500;      // Frequency for long press, in Hz
+const int shortPressDuration = 100; // Duration for short press, in ms
+const int longPressDuration = 1000; // Duration for long press, in ms
 
 const int flickerTime = 200;       // Flicker time in ms
 const int debounceButtonTime = 50; // Debounce time in ms
@@ -126,7 +124,7 @@ void buttonISR()
             if (pressDuration < longPressDuration * 1000)
             { // Short press
                 checkedSegments[currentSegment] = !checkedSegments[currentSegment];
-                tone(BUZZER_PIN, SHORT_PRESS_FREQ, SHORT_PRESS_DURATION);
+                tone(BUZZER_PIN, shortPressFreq, shortPressDuration);
             }
             else
             { // Long press
@@ -135,7 +133,7 @@ void buttonISR()
                     checkedSegments[i] = 0;
                 }
                 currentSegment = dp;
-                tone(BUZZER_PIN, LONG_PRESS_FREQ, LONG_PRESS_DURATION);
+                tone(BUZZER_PIN, longPressFreq, longPressDuration);
             }
         }
     }
@@ -147,13 +145,13 @@ Direction getDirection()
     int x = analogRead(PIN_JOY_X);
     int y = analogRead(PIN_JOY_Y);
 
-    if (x < JOY_CENTER - JOY_THRESHOLD)
+    if (x < joyCenter - joyThreshold)
         return Direction::LEFT;
-    else if (x > JOY_CENTER + JOY_THRESHOLD)
+    else if (x > joyCenter + joyThreshold)
         return Direction::RIGHT;
-    else if (y < JOY_CENTER - JOY_THRESHOLD)
+    else if (y < joyCenter - joyThreshold)
         return Direction::UP;
-    else if (y > JOY_CENTER + JOY_THRESHOLD)
+    else if (y > joyCenter + joyThreshold)
         return Direction::DOWN;
     else
         return Direction::NONE;
