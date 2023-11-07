@@ -1,29 +1,29 @@
-const int NUMBER_OF_FLOORS = 3;
+const int numberOfFloors = 3;
 
 // THE ORDER OF PINS IS IMPORTANT
 // I WILL USE THESE PINS TO INITIALIZE THE FLOOR BUTTONS AND LEDS
-const int PIN_FLOOR_BUTTON[NUMBER_OF_FLOORS] = {2, 3, 4};
-const int PIN_FLOOR_LED[NUMBER_OF_FLOORS] = {8, 9, 10};
+const int pinFloorButton[numberOfFloors] = {2, 3, 4};
+const int pinFloorLed[numberOfFloors] = {8, 9, 10};
 
 // I WILL USE THESE PINS TO INITIALIZE THE CONTROL PANEL
 // THE CONTROL PANEL HAS A LED AND A BUZZER TO INDICATE THE STATE OF THE ELEVATOR
 const int PIN_BUZZER = 11;
 const int PIN_CONTROLLED_LED = 12;
 
-const int DEBOUNCE_DELAY = 100; // 100 ms
+const int debounceDelay = 100; // 100 ms
 // FOR EITHER OPENING OR CLOSING DOORS THE TIME IS THE SAME
-const int DOORS_OPERATING_TIME = 1000; // 1 second
+const int doorsOperatingTime = 1000; // 1 second
 
 // THE FREQUENCIES OF THE TONES ARE ARBITRARY
-const int CLOSING_TONE_FREQ = 1000;
-const int ARRIVAL_TONE_FREQ = 2000;
-const int MOVING_TONE_FREQ = 1500;
+const int closingToneFreq = 1000;
+const int arrivalToneFreq = 2000;
+const int movingToneFreq = 1500;
 
 enum ElevatorState
 {
-  CLOSING_DOORS,
-  MOVING,
-  STATIONARY
+  closingDoors,
+  moving,
+  stationary
 };
 
 // TO KEEP TRACK OF THE PRESSES OF THE BUTTONS
@@ -32,7 +32,7 @@ enum ElevatorState
 class FloorQueue
 {
 private:
-  int queue[NUMBER_OF_FLOORS];
+  int queue[numberOfFloors];
   int front;
   int rear;
 
@@ -41,7 +41,7 @@ public:
 
   bool isFull()
   {
-    return (rear + 1) % NUMBER_OF_FLOORS == front;
+    return (rear + 1) % numberOfFloors == front;
   }
 
   bool isEmpty()
@@ -55,7 +55,7 @@ public:
     {
       return false;
     }
-    for (int i = front; i != rear; i = (i + 1) % NUMBER_OF_FLOORS)
+    for (int i = front; i != rear; i = (i + 1) % numberOfFloors)
     {
       if (queue[i] == floor)
       {
@@ -75,7 +75,7 @@ public:
     {
       front = 0;
     }
-    rear = (rear + 1) % NUMBER_OF_FLOORS;
+    rear = (rear + 1) % numberOfFloors;
     queue[rear] = floor;
   }
 
@@ -92,7 +92,7 @@ public:
     }
     else
     {
-      front = (front + 1) % NUMBER_OF_FLOORS;
+      front = (front + 1) % numberOfFloors;
     }
     return floor;
   }
@@ -136,19 +136,19 @@ public:
 class ControlPanel : public FlickerLed
 {
 private:
-  bool isStationary;
+  bool isstationary;
   int buzzerPin;
 
 public:
   ControlPanel(int ledPin, int buzzerPin) : FlickerLed(ledPin)
   {
-    this->isStationary = true;
+    this->isstationary = true;
     this->buzzerPin = buzzerPin;
     pinMode(buzzerPin, OUTPUT);
   }
   void update() override
   {
-    if (isStationary)
+    if (isstationary)
     {
       digitalWrite(ledPin, HIGH);
     }
@@ -159,21 +159,21 @@ public:
   }
   void toggleMode()
   {
-    isStationary = !isStationary;
+    isstationary = !isstationary;
   }
   void playArrivalTone()
   {
-    tone(buzzerPin, ARRIVAL_TONE_FREQ, DOORS_OPERATING_TIME);
+    tone(buzzerPin, arrivalToneFreq, doorsOperatingTime);
   }
 
   void playClosingTone()
   {
-    tone(buzzerPin, CLOSING_TONE_FREQ, DOORS_OPERATING_TIME);
+    tone(buzzerPin, closingToneFreq, doorsOperatingTime);
   }
 
-  void startMovingTone()
+  void startmovingTone()
   {
-    tone(buzzerPin, MOVING_TONE_FREQ);
+    tone(buzzerPin, movingToneFreq);
   }
 
   void stopTone()
@@ -237,36 +237,36 @@ private:
   unsigned long lastElevatorOpeningTime;
 
   // THE GADGETS
-  FloorControlPanel *floors[NUMBER_OF_FLOORS];
+  FloorControlPanel *floors[numberOfFloors];
   ControlPanel *panel;
 
   FloorQueue floorQueue;
 
 public:
-  Elevator(FloorControlPanel *_floors[NUMBER_OF_FLOORS], ControlPanel *_panel)
+  Elevator(FloorControlPanel *_floors[numberOfFloors], ControlPanel *_panel)
   {
     currentFloor = 0;
     targetFloor = 0;
-    for (int i = 0; i < NUMBER_OF_FLOORS; i++)
+    for (int i = 0; i < numberOfFloors; i++)
     {
       floors[i] = _floors[i];
     }
     panel = _panel;
     lastElevatorMoveTime = 0;
     lastElevatorOpeningTime = 0;
-    state = ElevatorState::STATIONARY;
+    state = ElevatorState::stationary;
   }
   void update() override
   {
     switch (state)
     {
-    case ElevatorState::STATIONARY:
+    case ElevatorState::stationary:
       // in case I change my mind, bcs until now it was necessary to read single input, but wiht queue it is not
       break;
-    case ElevatorState::CLOSING_DOORS:
+    case ElevatorState::closingDoors:
       closeDoors();
       break;
-    case ElevatorState::MOVING:
+    case ElevatorState::moving:
       moveElevator();
       break;
     default:
@@ -279,17 +279,17 @@ public:
 
   void closeDoors()
   {
-    if (millis() - lastElevatorMoveTime > DOORS_OPERATING_TIME)
+    if (millis() - lastElevatorMoveTime > doorsOperatingTime)
     {
-      state = ElevatorState::MOVING;
-      panel->startMovingTone();
+      state = ElevatorState::moving;
+      panel->startmovingTone();
       lastElevatorMoveTime = millis();
     }
   }
 
   void moveElevator()
   {
-    if (millis() - lastElevatorMoveTime > DOORS_OPERATING_TIME)
+    if (millis() - lastElevatorMoveTime > doorsOperatingTime)
     {
       if (currentFloor < targetFloor)
       {
@@ -303,7 +303,7 @@ public:
       if (currentFloor == targetFloor)
       {
         lastElevatorOpeningTime = millis();
-        state = ElevatorState::STATIONARY;
+        state = ElevatorState::stationary;
         panel->stopTone();
         panel->playArrivalTone();
         panel->toggleMode();
@@ -315,7 +315,7 @@ public:
 
   void read()
   {
-    for (int i = 0; i < NUMBER_OF_FLOORS; i++)
+    for (int i = 0; i < numberOfFloors; i++)
     {
       if (floors[i]->read())
       {
@@ -324,16 +324,16 @@ public:
     }
 
     // MAYBE YOU ARE ASKING WHY DOUBLE THE TIME? BCS THE DOORS ARE OPENING AND CLOSING
-    if (millis() - lastElevatorOpeningTime > DOORS_OPERATING_TIME * 2
+    if (millis() - lastElevatorOpeningTime > doorsOperatingTime * 2
 
         && !floorQueue.isEmpty()
 
-        && (state == ElevatorState::STATIONARY))
+        && (state == ElevatorState::stationary))
     {
       targetFloor = floorQueue.dequeue();
       if (targetFloor != currentFloor)
       {
-        state = ElevatorState::CLOSING_DOORS;
+        state = ElevatorState::closingDoors;
         panel->toggleMode();
         panel->playClosingTone();
         lastElevatorMoveTime = millis();
@@ -344,9 +344,9 @@ public:
   void write()
   {
     Serial.println(currentFloor);
-    for (int i = 0; i < NUMBER_OF_FLOORS; i++)
+    for (int i = 0; i < numberOfFloors; i++)
     {
-      if (state == ElevatorState::CLOSING_DOORS)
+      if (state == ElevatorState::closingDoors)
       {
         floors[currentFloor]->closeDoors();
       }
@@ -365,11 +365,11 @@ Elevator *elevator;
 
 void setup()
 {
-  FloorControlPanel *floors[NUMBER_OF_FLOORS];
+  FloorControlPanel *floors[numberOfFloors];
 
-  for (int i = 0; i < NUMBER_OF_FLOORS; i++)
+  for (int i = 0; i < numberOfFloors; i++)
   {
-    floors[i] = new FloorControlPanel(PIN_FLOOR_BUTTON[i], PIN_FLOOR_LED[i]);
+    floors[i] = new FloorControlPanel(pinFloorButton[i], pinFloorLed[i]);
   }
 
   ControlPanel panel(PIN_CONTROLLED_LED, PIN_BUZZER);
