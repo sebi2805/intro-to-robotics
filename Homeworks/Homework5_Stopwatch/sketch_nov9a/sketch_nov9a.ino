@@ -16,6 +16,8 @@ int lapIndex = 0;
 
 int displayNumber = 0;
 int number = 0;
+
+const int buzzerPin = 9;
 // Define connections to the shift register
 const int latchPin = 11; // Connects to STCP (latch pin) on the shift register
 const int clockPin = 10; // Connects to SHCP (clock pin) on the shift register
@@ -25,15 +27,25 @@ const int segD1 = 4;
 const int segD2 = 5;
 const int segD3 = 6;
 const int segD4 = 7;
+const int segD5 = 13; // for the index lap display
 // Store the digits in an array for easy access
-int displayDigits[] = {segD1, segD2, segD3, segD4};
-const int displayCount = 4; // Number of digits in the display
+int displayDigits[] = {segD1, segD2, segD3, segD4, segD5};
+const int displayCount = 5; // Number of digits in the display
 // Define the number of unique encodings (0-9, A-F for hexadecimal)
 const int debounceDelay = 100;
 
-const int encodingsNumber = 16; // Variables for controlling the display update timing
+const int encodingsNumber = 10; // Variables for controlling the display update timing
 unsigned long lastIncrement = 0;
 unsigned long delayCount = 50; // Delay between updates (milliseconds)
+
+const int resetToneFreq = 1000;    // Frequency in Hertz for reset tone
+const int resetToneDuration = 200; // Duration in milliseconds for reset tone
+
+const int startPauseToneFreq = 800;     // Frequency for start/pause tone
+const int startPauseToneDuration = 150; // Duration for start/pause tone
+
+const int saveLapToneFreq = 1200;    // Frequency for save lap tone
+const int saveLapToneDuration = 150; // Duration for save lap tone
 
 // Define byte encodings for the hexadecimal characters 0-F
 byte byteEncodings[encodingsNumber] = {
@@ -58,7 +70,7 @@ void startPauseISR()
   unsigned long currentTime = millis();
   if ((currentTime - lastDebounceTimeStartPause) > debounceDelay)
   {
-    Serial.println("Start/Pause button pressed");
+    tone(buzzerPin, startPauseToneFreq, startPauseToneDuration);
     isRunning = !isRunning;
     lastDebounceTimeStartPause = currentTime;
   }
@@ -70,6 +82,7 @@ void saveLapISR()
   unsigned long currentTime = millis();
   if ((currentTime - lastDebounceTimeSaveLap) > debounceDelay)
   {
+    tone(buzzerPin, saveLapToneFreq, saveLapToneDuration);
     if (isRunning)
     {
       lapTimes[lapIndex] = number;
@@ -93,19 +106,17 @@ void reset()
     unsigned long currentTime = millis();
     if (currentTime - lastResetButtonPress > debounceDelay)
     {
-      Serial.println("Reset button pressed");
-      if (isRunning)
-      {
-        number = 0;
-        displayNumber = 0;
-      }
-      else
+      tone(buzzerPin, resetToneFreq, resetToneDuration);
+      number = 0;
+      displayNumber = 0;
+      if (!isRunning)
       {
         for (int i = 0; i < 4; ++i)
         {
           lapTimes[i] = 0;
         }
       }
+
       lastResetButtonPress = currentTime;
     }
   }
@@ -123,10 +134,14 @@ void setup()
     pinMode(displayDigits[i], OUTPUT);
     digitalWrite(displayDigits[i], HIGH);
   }
+  digitalWrite(displayDigits[displayCount - 2], LOW);
   digitalWrite(displayDigits[displayCount - 1], LOW);
+
   pinMode(startPauseButtonPin, INPUT_PULLUP);
   pinMode(resetButtonPin, INPUT_PULLUP);
   pinMode(saveLapButtonPin, INPUT_PULLUP);
+
+  pinMode(buzzerPin, OUTPUT);
 
   attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, RISING);
   attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, RISING);
@@ -134,6 +149,7 @@ void setup()
   // Begin serial communication for debugging purposes
   Serial.begin(9600);
 }
+
 void loop()
 {
 
@@ -149,6 +165,7 @@ void loop()
   writeNumber(displayNumber);
   reset();
 }
+
 void writeReg(int digit)
 {
   // Prepare to shift data by setting the latch pin low
@@ -158,6 +175,7 @@ void writeReg(int digit)
   // Latch the data onto the output pins by setting the latch pin high
   digitalWrite(latchPin, HIGH);
 }
+
 void activateDisplay(int displayNumber)
 {
   // Turn off all digit control pins to avoid ghosting
@@ -171,33 +189,47 @@ void activateDisplay(int displayNumber)
 
 void writeNumber(int number)
 {
+
   if (number == 0)
   {
+    writeReg(B00000000);
     activateDisplay(3);
     writeReg(byteEncodings[0]);
-    return;
+
+    writeReg(B00000000);
+    activateDisplay(4);
+    writeReg(byteEncodings[lapIndex]);
   }
   else
   {
     int currentNumber = number;
-    int displayDigit = 3;
+    int displayDigit = 4;
     int lastDigit = 0;
 
     while (currentNumber != 0)
     {
-      lastDigit = currentNumber % 10;
       activateDisplay(displayDigit);
-      if (displayDigit == 2)
+      if (displayDigit == 4)
       {
-        writeReg((byteEncodings[lastDigit] | B00000001));
+
+        writeReg(byteEncodings[lapIndex]);
       }
       else
       {
-        writeReg(byteEncodings[lastDigit]);
+        lastDigit = currentNumber % 10;
+
+        if (displayDigit == 2)
+        {
+          writeReg((byteEncodings[lastDigit] | B00000001));
+        }
+        else
+        {
+          writeReg(byteEncodings[lastDigit]);
+        }
+        currentNumber /= 10;
       }
       delay(0); // A delay can be increased to visualize multiplexing
       displayDigit--;
-      currentNumber /= 10;
       writeReg(B00000000); // Clear the register to avoid ghosting
     }
   }
