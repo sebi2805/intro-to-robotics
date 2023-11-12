@@ -6,9 +6,9 @@ const int saveLapButtonPin = 3;
 const int resetButtonPin = 8;
 
 // Pin definitions for the 74HC595 shift register
-const int dataPin = 13;  // Connect to DS of 74HC595
-const int latchPin = 12; // Connect to ST_CP of 74HC595
-const int clockPin = 11; // Connect to SH_CP of 74HC595
+const int dataPin = 12;  // Connect to DS of 74HC595
+const int latchPin = 11; // Connect to ST_CP of 74HC595
+const int clockPin = 10; // Connect to SH_CP of 74HC595
 
 // Variables for stopwatch logic
 volatile bool isRunning = false;
@@ -22,7 +22,7 @@ int lapIndex = 0;
 volatile unsigned long lastDebounceTimeStartPause = 0;
 volatile unsigned long lastDebounceTimeSaveLap = 0;
 volatile unsigned long lastDebounceTimeReset = 0;
-const unsigned long debounceDelay = 50; // Debounce delay in milliseconds
+const unsigned long debounceDelay = 100; // Debounce delay in milliseconds
 
 const int digitPins[4] = {4, 5, 6, 7};
 
@@ -31,16 +31,16 @@ void clearDigits()
 {
   for (int i = 0; i < 4; i++)
   {
-    digitalWrite(digitPins[i], LOW); // Set to HIGH for common cathode
+    digitalWrite(digitPins[i], HIGH); // Set to HIGH for common cathode
   }
 }
 
 // Function to display a number on a specific digit
 void displayDigit(int digit, byte segments)
 {
-  clearDigits();                        // Turn off all digits
-  writeShiftRegister(segments);         // Send segment data to the shift register
-  digitalWrite(digitPins[digit], HIGH); // Turn on the current digit (set to LOW for common cathode)
+  clearDigits();                       // Turn off all digits
+  writeShiftRegister(segments);        // Send segment data to the shift register
+  digitalWrite(digitPins[digit], LOW); // Turn on the current digit (set to LOW for common cathode)
 }
 
 void startPauseISR()
@@ -146,22 +146,23 @@ void updateDisplay()
   static int currentDigit = 0;
   byte segments;
   // Split the stopwatch time into individual digits
-  int tenths = stopwatchTime % 10;
-  int seconds = (stopwatchTime / 10) % 60;
-  int minutes = (stopwatchTime / 600) % 60; // assuming you want to count minutes as well
 
-  Serial.print("Minutes: ");
-  Serial.print(minutes);
-  Serial.print(", Seconds: ");
-  Serial.print(seconds);
-  Serial.print(", Tenths: ");
-  Serial.println(tenths);
+  int seconds = (stopwatchTime / 10) % 1000; // Total seconds
+  int tenths = stopwatchTime % 10;           // Tenths of a second
+
+  // Serial.print("Minutes: ");
+  // Serial.print(minutes);
+  // Serial.print(", Seconds: ");
+  // Serial.print(seconds);
+  // Serial.print(", Tenths: ");
+  // Serial.println(tenths);
   // Convert these digits into the corresponding segments
   byte digits[numDigits] = {
-      getSegmentValue(minutes / 10),
-      getSegmentValue(minutes % 10),
-      getSegmentValue(seconds / 10),
-      getSegmentValue(seconds % 10)};
+      getSegmentValue((seconds / 100) % 10),      // Hundreds place of seconds
+      getSegmentValue((seconds / 10) % 10),       // Tens place of seconds
+      getSegmentValue(seconds % 10) | 0b10000000, // Ones place of seconds, with the decimal point
+      getSegmentValue(tenths)                     // Tenths of a second
+  };
 
   // Add the decimal point to the second digit (for tenths of a second)
   digits[2] |= 0b10000000; // Assuming 'dp' is the MSB
@@ -170,12 +171,13 @@ void updateDisplay()
   setDigit(currentDigit, digits[currentDigit]);
 
   // Display the segments on the current digit
-  Serial.print("Digit: ");
-  Serial.print(currentDigit);
-  Serial.print(", Segments: ");
-  Serial.println(digits[currentDigit], BIN); // Print in binary format
-
-  displayDigit(1, digits[currentDigit]);
+  // Serial.print("Digit: ");
+  // Serial.print(currentDigit);
+  // Serial.print(", Segments: ");
+  // Serial.println(digits[currentDigit], BIN); // Print in binary format
+  Serial.print(digits[0]);
+  Serial.print("\n");
+  displayDigit(currentDigit, digits[currentDigit]);
 
   // Move to the next digit
   currentDigit = (currentDigit + 1) % 4;
@@ -188,9 +190,13 @@ void setup()
   pinMode(resetButtonPin, INPUT_PULLUP);
   pinMode(saveLapButtonPin, INPUT_PULLUP);
 
+  for (int i = 0; i < 4; i++)
+  {
+    pinMode(digitPins[i], OUTPUT);
+  }
   // Attach the interrupts to the buttons
-  attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, RISING);
 
   // Shift register setup
   pinMode(dataPin, OUTPUT);
@@ -221,5 +227,5 @@ void loop()
   reset();
 
   // Small delay to reduce button bounce
-  delay(10);
+  delay(5);
 }
