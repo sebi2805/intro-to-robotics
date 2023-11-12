@@ -1,55 +1,58 @@
+// Pin definitions
+const int startPauseButtonPin = 2; // Start/Pause button
+const int saveLapButtonPin = 3;    // Save Lap button
+const int resetButtonPin = 8;      // Reset button
+const int buzzerPin = 9;           // Buzzer
 
-// Pin definitions for the buttons
-const int startPauseButtonPin = 2;
-const int saveLapButtonPin = 3;
-const int resetButtonPin = 8;
+// Display pins
+const int latchPin = 11; // STCP (latch pin) on the shift register
+const int clockPin = 10; // SHCP (clock pin) on the shift register
+const int dataPin = 12;  // DS (data pin) on the shift register
 
-// Variables for stopwatch logic
-volatile bool isRunning = false;
+// Digit number
+const int digit1 = 0;
+const int digit2 = 1;
+const int digit3 = 2;
+const int digit4 = 3;
+const int digit5Lap = 4;
 
-unsigned long lastDebounceTimeStartPause = 0;
-unsigned long lastDebounceTimeSaveLap = 0;
-
-unsigned long lastUpdateTime = 0;
-unsigned long lapTimes[4] = {0};
-int lapIndex = 0;
-
-int displayNumber = 0;
-int number = 0;
-
-const int buzzerPin = 9;
-// Define connections to the shift register
-const int latchPin = 11; // Connects to STCP (latch pin) on the shift register
-const int clockPin = 10; // Connects to SHCP (clock pin) on the shift register
-const int dataPin = 12;  // Connects to DS (data pin) on the shift register
-// Define connections to the digit control pins for a 4-digit display
+// Segment control pins for a 5-digit display
 const int segD1 = 4;
 const int segD2 = 5;
 const int segD3 = 6;
 const int segD4 = 7;
-const int segD5 = 13; // for the index lap display
-// Store the digits in an array for easy access
+const int segD5 = 13; // For the lap index display
+
+// Display configuration
 int displayDigits[] = {segD1, segD2, segD3, segD4, segD5};
 const int displayCount = 5; // Number of digits in the display
-// Define the number of unique encodings (0-9, A-F for hexadecimal)
-const int debounceDelay = 100;
 
-const int encodingsNumber = 10; // Variables for controlling the display update timing
+// Stopwatch variables
+volatile bool isRunning = false;
+unsigned long lastDebounceTimeStartPause = 0;
+unsigned long lastDebounceTimeSaveLap = 0;
+unsigned long lastUpdateTime = 0;
+unsigned long lapTimes[4] = {0};
+int lapIndex = 0;
+int displayNumber = 0;
+int number = 0;
+
+// Timing constants
+const int debounceDelay = 100;       // Debounce delay in milliseconds
+const unsigned long delayCount = 50; // Delay between display updates in milliseconds
 unsigned long lastIncrement = 0;
-unsigned long delayCount = 50; // Delay between updates (milliseconds)
 
-const int resetToneFreq = 1000;    // Frequency in Hertz for reset tone
-const int resetToneDuration = 200; // Duration in milliseconds for reset tone
-
+// Tone frequencies and durations
+const int resetToneFreq = 1000;         // Frequency for reset tone
+const int resetToneDuration = 200;      // Duration for reset tone
 const int startPauseToneFreq = 800;     // Frequency for start/pause tone
 const int startPauseToneDuration = 150; // Duration for start/pause tone
+const int saveLapToneFreq = 1200;       // Frequency for save lap tone
+const int saveLapToneDuration = 150;    // Duration for save lap tone
 
-const int saveLapToneFreq = 1200;    // Frequency for save lap tone
-const int saveLapToneDuration = 150; // Duration for save lap tone
-
-// Define byte encodings for the hexadecimal characters 0-F
+// Byte encodings for numbers 0-9 on a 7-segment display
+const int encodingsNumber = 10; // Number of unique encodings
 byte byteEncodings[encodingsNumber] = {
-    // A B C D E F G DP
     B11111100, // 0
     B01100000, // 1
     B11011010, // 2
@@ -59,8 +62,7 @@ byte byteEncodings[encodingsNumber] = {
     B10111110, // 6
     B11100000, // 7
     B11111110, // 8
-    B11110110, // 9
-
+    B11110110  // 9
 };
 
 // Function to turn off all digits
@@ -128,24 +130,29 @@ void setup()
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
+
   // Initialize digit control pins and set them to LOW (off)
   for (int i = 0; i < displayCount; i++)
   {
     pinMode(displayDigits[i], OUTPUT);
-    digitalWrite(displayDigits[i], HIGH);
+    digitalWrite(displayDigits[i], LOW);
   }
-  digitalWrite(displayDigits[displayCount - 2], LOW);
-  digitalWrite(displayDigits[displayCount - 1], LOW);
 
+  // Button pin setups with internal pull-up resistors
   pinMode(startPauseButtonPin, INPUT_PULLUP);
   pinMode(resetButtonPin, INPUT_PULLUP);
   pinMode(saveLapButtonPin, INPUT_PULLUP);
 
+  // Buzzer pin setup
   pinMode(buzzerPin, OUTPUT);
 
+  // Attach interrupts to the button pins
   attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, RISING);
   attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, RISING);
-  writeReg(byteEncodings[0]); // Clear the register to avoid ghosting
+
+  // Clear the shift register to avoid ghosting on the display
+  writeReg(byteEncodings[0]);
+
   // Begin serial communication for debugging purposes
   Serial.begin(9600);
 }
@@ -187,50 +194,31 @@ void activateDisplay(int displayNumber)
   digitalWrite(displayDigits[displayNumber], LOW);
 }
 
-void writeNumber(int number)
+void writeDigitNumber(int digit, int number, bool decimal = false)
 {
-
-  if (number == 0)
+  writeReg(B00000000);
+  activateDisplay(digit);
+  if (decimal)
   {
-    writeReg(B00000000);
-    activateDisplay(3);
-    writeReg(byteEncodings[0]);
-
-    writeReg(B00000000);
-    activateDisplay(4);
-    writeReg(byteEncodings[lapIndex]);
+    writeReg((byteEncodings[number] | B00000001));
   }
   else
   {
-    int currentNumber = number;
-    int displayDigit = 4;
-    int lastDigit = 0;
-
-    while (currentNumber != 0)
-    {
-      activateDisplay(displayDigit);
-      if (displayDigit == 4)
-      {
-
-        writeReg(byteEncodings[lapIndex]);
-      }
-      else
-      {
-        lastDigit = currentNumber % 10;
-
-        if (displayDigit == 2)
-        {
-          writeReg((byteEncodings[lastDigit] | B00000001));
-        }
-        else
-        {
-          writeReg(byteEncodings[lastDigit]);
-        }
-        currentNumber /= 10;
-      }
-      delay(0); // A delay can be increased to visualize multiplexing
-      displayDigit--;
-      writeReg(B00000000); // Clear the register to avoid ghosting
-    }
+    writeReg(byteEncodings[number]);
   }
+  delay(0);
+}
+
+void writeNumber(int number)
+{
+  int fourth = number % 10;
+  int third = (number / 10) % 10;
+  int second = (number / 100) % 10;
+  int first = (number / 1000) % 10;
+
+  writeDigitNumber(digit1, first);
+  writeDigitNumber(digit2, second);
+  writeDigitNumber(digit3, third, true);
+  writeDigitNumber(digit4, fourth);
+  writeDigitNumber(digit5Lap, lapIndex);
 }
