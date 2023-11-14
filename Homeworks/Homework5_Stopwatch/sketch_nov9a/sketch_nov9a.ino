@@ -147,8 +147,8 @@ void setup()
   pinMode(buzzerPin, OUTPUT);
 
   // Attach interrupts to the button pins
-  attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, RISING);
-  attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, FALLING);
 
   // Clear the shift register to avoid ghosting on the display
   writeReg(byteEncodings[0]);
