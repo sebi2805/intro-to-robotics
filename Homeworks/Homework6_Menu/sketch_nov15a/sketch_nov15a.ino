@@ -53,6 +53,40 @@ void loop()
     showMainMenu();
 }
 
+bool getNumericInput(const String &input, int &outNumber)
+{
+    if (input.length() == 0 || !isNumeric(input))
+    {
+        return false;
+    }
+
+    outNumber = input.toInt();
+    return true;
+}
+
+bool isNumeric(const String &str)
+{
+    for (char c : str)
+    {
+        if (!isDigit(c) && c != '-' && c != '+')
+        { // Allow for negative and positive numbers
+            return false;
+        }
+    }
+    return true;
+}
+String readLine()
+{
+    while (!Serial.available())
+    {
+        // Wait for user input
+    }
+
+    String input = Serial.readStringUntil('\n');
+    input.trim(); // Remove any leading/trailing whitespace
+    return input;
+}
+
 void showMainMenu()
 {
     Serial.println(F("=== Main Menu ==="));
@@ -67,8 +101,14 @@ void showMainMenu()
         // Wait for user input
     }
 
-    int choice = Serial.parseInt(); // Read user input
-    Serial.flush();                 // Clear the serial buffer
+    String input = readLine();
+    int choice;
+
+    if (!getNumericInput(input, choice))
+    {
+        Serial.println(F("Invalid choice, please enter a number."));
+        return;
+    }
 
     switch (choice)
     {
@@ -104,8 +144,14 @@ void handleSensorSettingsMenu()
         // Wait for user input
     }
 
-    int choice = Serial.parseInt();
-    Serial.flush();
+    String input = readLine();
+    int choice;
+
+    if (!getNumericInput(input, choice))
+    {
+        Serial.println(F("Invalid choice, please enter a number."));
+        return;
+    }
 
     switch (choice)
     {
@@ -130,12 +176,11 @@ void handleSensorSettingsMenu()
 void setSamplingInterval()
 {
     Serial.println(F("Enter sampling interval (1-10 seconds):"));
-    while (!Serial.available())
-    {
-        // Wait for input
-    }
-    int interval = Serial.parseInt();
-    if (interval >= 1 && interval <= 10)
+
+    String input = readLine();
+    int interval;
+
+    if (getNumericInput(input, interval) && interval >= 1 && interval <= 10)
     {
         sensorSamplingInterval = interval;
         Serial.print(F("Sampling interval set to "));
@@ -146,19 +191,16 @@ void setSamplingInterval()
     {
         Serial.println(F("Invalid interval. Please enter a value between 1 and 10."));
     }
-    Serial.flush();
 }
 
 void setUltrasonicThreshold()
 {
     Serial.println(F("Enter ultrasonic threshold (2-400 cm):"));
-    while (!Serial.available())
-    {
-        // Wait for user input
-    }
 
-    int threshold = Serial.parseInt();
-    if (threshold >= 2 && threshold <= 400)
+    String input = readLine();
+    int threshold;
+
+    if (getNumericInput(input, threshold) && threshold >= 2 && threshold <= 400)
     {
         ultrasonicThreshold = threshold;
         Serial.print(F("Ultrasonic threshold set to "));
@@ -169,19 +211,16 @@ void setUltrasonicThreshold()
     {
         Serial.println(F("Invalid threshold. Please enter a value between 2 and 400 cm."));
     }
-    Serial.flush();
 }
 
 void setLDRThreshold()
 {
     Serial.println(F("Enter LDR threshold (0-1023):"));
-    while (!Serial.available())
-    {
-        // Wait for user input
-    }
 
-    int threshold = Serial.parseInt();
-    if (threshold >= 0 && threshold <= 1023)
+    String input = readLine();
+    int threshold;
+
+    if (getNumericInput(input, threshold) && threshold >= 0 && threshold <= 1023)
     {
         ldrThreshold = threshold;
         Serial.print(F("LDR threshold set to "));
@@ -192,7 +231,6 @@ void setLDRThreshold()
     {
         Serial.println(F("Invalid threshold. Please enter a value between 0 and 1023."));
     }
-    Serial.flush();
 }
 
 void handleResetLoggerData()
@@ -208,9 +246,14 @@ void handleResetLoggerData()
         // Wait for user input
     }
 
-    int choice = Serial.parseInt();
-    Serial.flush();
+    String input = readLine();
+    int choice;
 
+    if (!getNumericInput(input, choice))
+    {
+        Serial.println(F("Invalid choice, please enter a number."));
+        return;
+    }
     if (choice == 1)
     {
         // Reset the log data
@@ -279,8 +322,14 @@ void handleSystemStatusMenu()
         // Wait for user input
     }
 
-    int choice = Serial.parseInt();
-    Serial.flush();
+    String input = readLine();
+    int choice;
+
+    if (!getNumericInput(input, choice))
+    {
+        Serial.println(F("Invalid choice, please enter a number."));
+        return;
+    }
 
     switch (choice)
     {
@@ -315,8 +364,14 @@ void handleRGBControlMenu()
         // Wait for user input
     }
 
-    int choice = Serial.parseInt();
-    Serial.flush();
+    String input = readLine();
+    int choice;
+
+    if (!getNumericInput(input, choice))
+    {
+        Serial.println(F("Invalid choice, please enter a number."));
+        return;
+    }
 
     switch (choice)
     {
@@ -336,42 +391,39 @@ void handleRGBControlMenu()
 
 void manualColorControl()
 {
-    Serial.println(F("Enter RGB values (0-255) in format R,G,B:"));
-    while (!Serial.available())
-    {
-        // Wait for user input
-    }
+    int r = getIndividualColorValue("R");
+    int g = getIndividualColorValue("G");
+    int b = getIndividualColorValue("B");
 
-    String rgbInput = Serial.readStringUntil('\n');
-    Serial.flush();
-
-    int r, g, b;
-    if (parseRGBValues(rgbInput, r, g, b))
-    {
-        setRGBColor(r, g, b);
-        Serial.println(F("RGB color set."));
-    }
-    else
-    {
-        Serial.println(F("Invalid input format."));
-    }
+    setRGBColor(r, g, b);
+    Serial.print(F("RGB color set to R:"));
+    Serial.print(r);
+    Serial.print(F(", G:"));
+    Serial.print(g);
+    Serial.print(F(", B:"));
+    Serial.println(b);
 }
 
-bool parseRGBValues(const String &input, int &r, int &g, int &b)
+int getIndividualColorValue(const char *colorName)
 {
-    int firstCommaIndex = input.indexOf(',');
-    int lastCommaIndex = input.lastIndexOf(',');
-
-    if (firstCommaIndex == -1 || lastCommaIndex == -1 || firstCommaIndex == lastCommaIndex)
+    while (true)
     {
-        return false; // Invalid format
+        Serial.print(F("Enter "));
+        Serial.print(colorName);
+        Serial.println(F(" value (0-255):"));
+
+        String input = readLine();
+        int value;
+
+        if (getNumericInput(input, value) && value >= 0 && value <= 255)
+        {
+            return value;
+        }
+        else
+        {
+            Serial.println(F("Invalid value. Please enter a number between 0 and 255."));
+        }
     }
-
-    r = input.substring(0, firstCommaIndex).toInt();
-    g = input.substring(firstCommaIndex + 1, lastCommaIndex).toInt();
-    b = input.substring(lastCommaIndex + 1).toInt();
-
-    return r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255;
 }
 
 void toggleAutomaticMode()
