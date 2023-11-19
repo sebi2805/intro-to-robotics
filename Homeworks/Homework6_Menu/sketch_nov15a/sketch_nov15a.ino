@@ -2,8 +2,8 @@
 // Global variables for sensor settings
 unsigned long sensorSamplingInterval = 1000; // 1 second in milliseconds
 unsigned long lastSampleTime = 0;
-int ultrasonicThreshold = 24; // Example default threshold in centimeters
-int ldrThreshold = 24;        // Example default threshold for LDR
+int ultrasonicThreshold = 25; // Example default threshold in centimeters
+int ldrThreshold = 40;        // Example default threshold for LDR
 
 const float thresholdMargin = 0.8;
 
@@ -14,6 +14,7 @@ const int ldrPin = A0;
 const int redPin = 11;
 const int greenPin = 10;
 const int bluePin = 9;
+const int buzzerPin = 12;
 
 // RGB LED state
 int redValue = 0;
@@ -102,6 +103,7 @@ bool isNumeric(const String &str)
     }
     return true;
 }
+
 String readLine()
 {
     if (Serial.available())
@@ -111,6 +113,7 @@ String readLine()
         return input;
     }
 }
+
 void reset()
 {
     mainMenuIndex = 0;
@@ -225,12 +228,17 @@ void updateLEDColor()
 {
     if (isAutoMode)
     {
-        int ldrValue = analogRead(ldrPin);
-        int ultrasonicValue = readUltrasonic();
+        int ldrValue = readSensorDataFromEEPROM(ldrSensor, currentLDRIndex - 1);
+        int ultrasonicValue = readSensorDataFromEEPROM(ultrasonicSensor, currentUltrasonicIndex - 1);
 
         if (ldrValue >= ldrThreshold || ultrasonicValue >= ultrasonicThreshold)
         {
-            // At least one sensor exceeded its threshold - RED
+            int frequency = 1000;
+            int duration = 500;
+
+            tone(buzzerPin, frequency); // Start playing a tone
+            delay(duration);            // Wait for the duration of the tone
+            noTone(buzzerPin);
             setRGBColor(255, 0, 0);
         }
         else if (ldrValue >= ldrThreshold * thresholdMargin || ultrasonicValue >= ultrasonicThreshold * thresholdMargin)
@@ -258,6 +266,8 @@ void displayMainMenuOptions()
         Serial.println(F("2. Reset Logger Data"));
         Serial.println(F("3. System Status"));
         Serial.println(F("4. RGB LED Control"));
+        Serial.println(F("5. Plot LDR Sensor Data"));
+        Serial.println(F("6. Plot Ultrasonic Sensor Data"));
         Serial.println(F("Enter your choice: "));
         shouldDisplay = false;
     }
@@ -294,11 +304,36 @@ void showMainMenu()
     case 4:
         handleRGBControlMenu();
         break;
+    case 5:
+        plotSensorData(ldrSensor);
+        break;
+    case 6:
+        plotSensorData(ultrasonicSensor);
+        break;
     default:
         Serial.println(F("Invalid choice, try again."));
         reset();
         break;
     }
+}
+void plotSensorData(SensorType sensorType)
+{
+    Serial.println(F("Plotting data. Send 'q' to stop."));
+
+    while (!Serial.available() || Serial.read() != 'q')
+    {
+        int value = (sensorType == ldrSensor) ? analogRead(ldrPin) : readUltrasonic();
+        Serial.println(value);
+        delay(sensorSamplingInterval);
+
+        if (Serial.available() && Serial.read() == 'q')
+        {
+            break;
+        }
+    }
+
+    Serial.println(F("Stopped plotting."));
+    reset(); // Reset to show main menu again
 }
 
 ///////////////////////////////////////////////////////////////
@@ -306,107 +341,147 @@ void showMainMenu()
 void handleSensorSettingsMenu()
 {
 
+    static int subMenuIndex = 0;
+    static bool shouldDisplay = true;
+
+    switch (subMenuIndex)
+    {
+    case 0:
+        if (shouldDisplay)
+        {
+            Serial.println(F("=== Sensor Settings Menu ==="));
+            Serial.println(F("1. Set Sampling Interval (1-10 seconds)"));
+            Serial.println(F("2. Set Ultrasonic Alert Threshold"));
+            Serial.println(F("3. Set LDR Alert Threshold"));
+            Serial.println(F("4. Back"));
+            Serial.println(F("Enter your choice: "));
+            shouldDisplay = false;
+        }
+        if (Serial.available())
+        {
+            String input = readLine();
+            if (!getNumericInput(input, subMenuIndex))
+            {
+                Serial.println(F("Invalid choice, please enter a number."));
+                return;
+            }
+            shouldDisplay = true;
+        }
+        break;
+    case 1:
+        if (setSamplingInterval())
+            subMenuIndex = 0;
+        break;
+    case 2:
+        if (setUltrasonicThreshold())
+            subMenuIndex = 0;
+        break;
+    case 3:
+        if (setLDRThreshold())
+            subMenuIndex = 0;
+        break;
+    case 4:
+        // Go back to the main menu
+        reset();
+        return;
+    default:
+        Serial.println(F("Invalid choice, try again."));
+        break;
+    }
+}
+
+bool setSamplingInterval()
+{
     static bool shouldDisplay = true;
     if (shouldDisplay)
     {
-        Serial.println(F("=== Sensor Settings Menu ==="));
-        Serial.println(F("1. Set Sampling Interval (1-10 seconds)"));
-        Serial.println(F("2. Set Ultrasonic Alert Threshold"));
-        Serial.println(F("3. Set LDR Alert Threshold"));
-        Serial.println(F("4. Back"));
-        Serial.println(F("Enter your choice: "));
+        Serial.println(F("Enter sampling interval (1-10 seconds):"));
         shouldDisplay = false;
     }
-    if (Serial.available())
+    else if (Serial.available())
     {
         String input = readLine();
-        int choice;
-        if (!getNumericInput(input, choice))
+        int interval;
+        Serial.println(input);
+        if (!getNumericInput(input, interval))
         {
-            Serial.println(F("Invalid choice, please enter a number."));
-            return;
+            Serial.println(F("Invalid interval. Please enter a number."));
         }
-        shouldDisplay = true;
-        switch (choice)
+        else if (interval >= 1 && interval <= 10)
         {
-        case 1:
-            setSamplingInterval();
-            break;
-        case 2:
-            setUltrasonicThreshold();
-            break;
-        case 3:
-            setLDRThreshold();
-            break;
-        case 4:
-            // Go back to the main menu
-            reset();
-            return;
-        default:
-            Serial.println(F("Invalid choice, try again."));
-            break;
+            sensorSamplingInterval = interval * 1000;
+            Serial.print(F("Sampling interval set to "));
+            Serial.print(interval);
+            Serial.println(F(" seconds."));
+            shouldDisplay = true;
+            return true;
+        }
+        else
+        {
+            Serial.println(F("Invalid interval. Please enter a value between 1 and 10."));
         }
     }
+    return false;
 }
 
-void setSamplingInterval()
+bool setUltrasonicThreshold()
 {
-    Serial.println(F("Enter sampling interval (1-10 seconds):"));
-
-    String input = readLine();
-    int interval;
-
-    if (getNumericInput(input, interval) && interval >= 1 && interval <= 10)
+    static bool shouldDisplay = true;
+    if (shouldDisplay)
     {
-        sensorSamplingInterval = interval;
-        Serial.print(F("Sampling interval set to "));
-        Serial.print(interval);
-        Serial.println(F(" seconds."));
+        Serial.println(F("Enter ultrasonic threshold (2-400 cm):"));
+        shouldDisplay = false;
     }
-    else
+    else if (Serial.available())
     {
-        Serial.println(F("Invalid interval. Please enter a value between 1 and 10."));
+        String input = readLine();
+        int threshold;
+
+        if (getNumericInput(input, threshold) && threshold >= 2 && threshold <= 400)
+        {
+            ultrasonicThreshold = threshold;
+            Serial.print(F("Ultrasonic threshold set to "));
+            Serial.print(threshold);
+            Serial.println(F(" cm."));
+            shouldDisplay = true;
+            return true;
+        }
+        else
+        {
+            Serial.println(F("Invalid threshold. Please enter a value between 2 and 400 cm."));
+        }
     }
+    return false;
 }
 
-void setUltrasonicThreshold()
+bool setLDRThreshold()
 {
-    Serial.println(F("Enter ultrasonic threshold (2-400 cm):"));
-
-    String input = readLine();
-    int threshold;
-
-    if (getNumericInput(input, threshold) && threshold >= 2 && threshold <= 400)
+    static bool shouldDisplay = true;
+    if (shouldDisplay)
     {
-        ultrasonicThreshold = threshold;
-        Serial.print(F("Ultrasonic threshold set to "));
-        Serial.print(threshold);
-        Serial.println(F(" cm."));
+        Serial.println(F("Enter LDR threshold (0-1023):"));
+        shouldDisplay = false;
     }
-    else
+    else if (Serial.available())
     {
-        Serial.println(F("Invalid threshold. Please enter a value between 2 and 400 cm."));
-    }
-}
+        String input = readLine();
+        int threshold;
 
-void setLDRThreshold()
-{
-    Serial.println(F("Enter LDR threshold (0-1023):"));
-
-    String input = readLine();
-    int threshold;
-
-    if (getNumericInput(input, threshold) && threshold >= 0 && threshold <= 1023)
-    {
-        ldrThreshold = threshold;
-        Serial.print(F("LDR threshold set to "));
-        Serial.print(threshold);
-        Serial.println(F("."));
+        if (getNumericInput(input, threshold) && threshold >= 0 && threshold <= 1023)
+        {
+            ldrThreshold = threshold;
+            Serial.print(F("LDR threshold set to "));
+            Serial.print(threshold);
+            Serial.println(F("."));
+            shouldDisplay = true;
+            return true;
+        }
+        else
+        {
+            Serial.println(F("Invalid threshold. Please enter a value between 0 and 1023."));
+        }
     }
-    else
-    {
-        Serial.println(F("Invalid threshold. Please enter a value between 0 and 1023."));
-    }
+    return false;
 }
 
 ///////////////////////////////////////////////////////////////
@@ -463,12 +538,12 @@ void displayCurrentSensorReadings()
     Serial.println(F("Current EEPROM Values:"));
 
     // Read and display the current value from EEPROM for the LDR sensor
-    int currentLDRValue = readSensorDataFromEEPROM(ldrSensor, currentLDRIndex);
+    int currentLDRValue = readSensorDataFromEEPROM(ldrSensor, currentLDRIndex - 1);
     Serial.print(F("LDR Value: "));
     Serial.println(currentLDRValue);
 
     // Read and display the current value from EEPROM for the Ultrasonic sensor
-    int currentUltrasonicValue = readSensorDataFromEEPROM(ultrasonicSensor, currentUltrasonicIndex);
+    int currentUltrasonicValue = readSensorDataFromEEPROM(ultrasonicSensor, currentUltrasonicIndex - 1);
     Serial.print(F("Ultrasonic Value: "));
     Serial.println(currentUltrasonicValue);
 }
