@@ -5,17 +5,15 @@ unsigned long lastSampleTime = 0;
 int ultrasonicThreshold = 24; // Example default threshold in centimeters
 int ldrThreshold = 24;        // Example default threshold for LDR
 
-const float THRESHOLD_MARGIN = 0.8;
-// Global variable to simulate data storage
-const int MAX_LOG_ENTRIES = 10; // Maximum number of log entries (for example)
+const float thresholdMargin = 0.8;
 
 const int ultrasonicTriggerPin = 2; // Example pin for the ultrasonic trigger
 const int ultrasonicEchoPin = 3;    // Example pin for the ultrasonic echo
 const int ldrPin = A0;
 // RGB LED pins (assuming common anode RGB LED)
-const int RED_PIN = 11;
-const int GREEN_PIN = 10;
-const int BLUE_PIN = 9;
+const int redPin = 11;
+const int greenPin = 10;
+const int bluePin = 9;
 
 // RGB LED state
 int redValue = 0;
@@ -23,172 +21,34 @@ int greenValue = 0;
 int blueValue = 0;
 
 // Automatic mode flag
-bool isAutoMode = false;
+bool isAutoMode = true;
 
 int mainMenuIndex = 0;
 
 enum SensorType
 {
-    LDR_SENSOR,
-    ULTRASONIC_SENSOR
+    ldrSensor,
+    ultrasonicSensor
     // Add more sensor types here if needed
 };
 
-const int LDR_START_ADDR = 0;                              // Starting address for LDR readings
-const int MAX_READINGS_PER_SENSOR = 20;                    // Max number of readings per sensor
-const int ULTRASONIC_START_ADDR = MAX_READINGS_PER_SENSOR; // Starting address for Ultrasonic readings
-int currentLDRIndex = 0;                                   // Index for the next LDR reading in EEPROM
+const int ldrStartAdress = 0;                            // Starting address for LDR readings
+const int maxReadingsPerSensor = 20;                     // Max number of readings per sensor
+const int ultrasonicStartAddress = maxReadingsPerSensor; // Starting address for Ultrasonic readings
+int currentLDRIndex = 0;                                 // Index for the next LDR reading in EEPROM
 int currentUltrasonicIndex = 0;
-
-int readUltrasonic()
-{
-    // Clear the trigger pin
-    digitalWrite(ultrasonicTriggerPin, LOW);
-    delayMicroseconds(2);
-
-    // Trigger the sensor by setting the trigger pin high for 10 microseconds
-    digitalWrite(ultrasonicTriggerPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(ultrasonicTriggerPin, LOW);
-
-    // Read the echo pin; pulseIn returns the duration in microseconds
-    long duration = pulseIn(ultrasonicEchoPin, HIGH);
-
-    // Calculate the distance
-    int distance = static_cast<int>(duration * 0.034 / 2); // Speed of sound wave divided by 2 (go and back)
-
-    return distance;
-}
-
-void writeSensorDataToEEPROM(SensorType sensorType, int index, int value)
-{
-    int address;
-    if (sensorType == LDR_SENSOR)
-    {
-        address = index;               // LDR data starts at 0
-        EEPROM.update(address, value); // Write LDR value (assuming it's already mapped to 0-255)
-    }
-    else if (sensorType == ULTRASONIC_SENSOR)
-    {
-        address = MAX_READINGS_PER_SENSOR * 2 + index * 2; // Ultrasonic data follows LDR data
-        byte lowByte = value & 0xFF;                       // Extract low byte
-        byte highByte = (value >> 8) & 0xFF;               // Extract high byte
-        EEPROM.update(address, lowByte);                   // Write low byte
-        EEPROM.update(address + 1, highByte);              // Write high byte
-    }
-    else
-    {
-        Serial.println(F("Invalid Sensor Type"));
-        return;
-    }
-}
-
-int readSensorDataFromEEPROM(SensorType sensorType, int index)
-{
-    int address, value;
-
-    if (sensorType == LDR_SENSOR)
-    {
-        address = index;              // LDR data starts at 0
-        value = EEPROM.read(address); // Read single byte
-    }
-    else if (sensorType == ULTRASONIC_SENSOR)
-    {
-        address = MAX_READINGS_PER_SENSOR * 2 + index * 2; // Ultrasonic data follows LDR data
-        byte lowByte = EEPROM.read(address);               // Read low byte
-        byte highByte = EEPROM.read(address + 1);          // Read high byte
-        value = (highByte << 8) | lowByte;                 // Combine bytes to form the original value
-    }
-    else
-    {
-        Serial.println(F("Invalid Sensor Type"));
-        return -1; // Return an error or invalid value
-    }
-
-    return value;
-}
-
-// Initialize the log data with dummy values (for testing)
-
-void initializeLogData()
-{
-    // Initialize LDR data
-    for (int i = 0; i < MAX_READINGS_PER_SENSOR; i++)
-    {
-        writeSensorDataToEEPROM(LDR_SENSOR, i, 0);
-    }
-
-    // Initialize Ultrasonic data
-    for (int i = 0; i < MAX_READINGS_PER_SENSOR; i++)
-    {
-        writeSensorDataToEEPROM(ULTRASONIC_SENSOR, i, 0);
-    }
-}
-
-void performSensorSampling()
-{
-    int ldrValue = analogRead(ldrPin);
-    ldrValue = map(ldrValue, 0, 1023, 0, 255); // Read LDR value
-    int ultrasonicValue = readUltrasonic();    // Read Ultrasonic sensor value
-
-    // Write these values to EEPROM
-    writeSensorDataToEEPROM(LDR_SENSOR, currentLDRIndex, ldrValue);
-    writeSensorDataToEEPROM(ULTRASONIC_SENSOR, currentUltrasonicIndex, ultrasonicValue);
-
-    // Update indexes for the next write operation
-    updateIndexes();
-}
-void updateIndexes()
-{
-    // Increment the LDR index and wrap if it reaches the maximum
-    currentLDRIndex = (currentLDRIndex + 1) % MAX_READINGS_PER_SENSOR;
-
-    // Increment the Ultrasonic index and wrap if it reaches the maximum
-    currentUltrasonicIndex = (currentUltrasonicIndex + 1) % MAX_READINGS_PER_SENSOR;
-}
-
-// Start Ultrasonic index after LDR readings
-// Index for the next Ultrasonic reading in EEPROM
 
 void setup()
 {
     Serial.begin(9600); // Initialize serial communication at 9600 baud rate
-    pinMode(RED_PIN, OUTPUT);
-    pinMode(GREEN_PIN, OUTPUT);
-    pinMode(BLUE_PIN, OUTPUT);
+    pinMode(redPin, OUTPUT);
+    pinMode(greenPin, OUTPUT);
+    pinMode(bluePin, OUTPUT);
     setRGBColor(redValue, greenValue, blueValue);
     pinMode(ultrasonicTriggerPin, OUTPUT);
     pinMode(ultrasonicEchoPin, INPUT);
-    // Initialize any other components (sensors, LEDs, etc.) here
-}
-
-void setRGBColor(int red, int green, int blue)
-{
-    analogWrite(RED_PIN, red);
-    analogWrite(GREEN_PIN, green);
-    analogWrite(BLUE_PIN, blue);
-}
-
-void updateLEDColor()
-{
-    int ldrValue = analogRead(ldrPin);
-    int ultrasonicValue = readUltrasonic();
-
-    if (ldrValue >= ldrThreshold || ultrasonicValue >= ultrasonicThreshold)
-    {
-        // At least one sensor exceeded its threshold - RED
-        setRGBColor(255, 0, 0);
-    }
-    else if (ldrValue >= ldrThreshold * THRESHOLD_MARGIN || ultrasonicValue >= ultrasonicThreshold * THRESHOLD_MARGIN)
-    {
-        // Sensors are approaching their thresholds - YELLOW
-        setRGBColor(255, 255, 0);
-    }
-    else
-    {
-        // All sensor values are in the safe range - GREEN
-        setRGBColor(0, 255, 0);
-    }
+    pinMode(ldrPin, INPUT);
+    initializeLogData();
 }
 
 void loop()
@@ -204,6 +64,22 @@ void loop()
     delay(9);
 }
 
+void initializeLogData()
+{
+    // Initialize LDR data
+    for (int i = 0; i < maxReadingsPerSensor; i++)
+    {
+        writeSensorDataToEEPROM(ldrSensor, i, 0);
+    }
+
+    // Initialize Ultrasonic data
+    for (int i = 0; i < maxReadingsPerSensor; i++)
+    {
+        writeSensorDataToEEPROM(ultrasonicSensor, i, 0);
+    }
+}
+
+///////////////////////////////////////////////////////////////
 bool getNumericInput(const String &input, int &outNumber)
 {
     if (input.length() == 0 || !isNumeric(input))
@@ -235,6 +111,142 @@ String readLine()
         return input;
     }
 }
+void reset()
+{
+    mainMenuIndex = 0;
+}
+///////////////////////////////////////////////////////////////
+
+int readUltrasonic()
+{
+    // Clear the trigger pin
+    digitalWrite(ultrasonicTriggerPin, LOW);
+    delayMicroseconds(2);
+
+    // Trigger the sensor by setting the trigger pin high for 10 microseconds
+    digitalWrite(ultrasonicTriggerPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(ultrasonicTriggerPin, LOW);
+
+    // Read the echo pin; pulseIn returns the duration in microseconds
+    long duration = pulseIn(ultrasonicEchoPin, HIGH);
+
+    // Calculate the distance
+    int distance = static_cast<int>(duration * 0.034 / 2); // Speed of sound wave divided by 2 (go and back)
+
+    return distance;
+}
+
+void writeSensorDataToEEPROM(SensorType sensorType, int index, int value)
+{
+    int address;
+    if (sensorType == ldrSensor)
+    {
+        address = index;               // LDR data starts at 0
+        EEPROM.update(address, value); // Write LDR value (assuming it's already mapped to 0-255)
+    }
+    else if (sensorType == ultrasonicSensor)
+    {
+        address = maxReadingsPerSensor * 2 + index * 2; // Ultrasonic data follows LDR data
+        byte lowByte = value & 0xFF;                    // Extract low byte
+        byte highByte = (value >> 8) & 0xFF;            // Extract high byte
+        EEPROM.update(address, lowByte);                // Write low byte
+        EEPROM.update(address + 1, highByte);           // Write high byte
+    }
+    else
+    {
+        Serial.println(F("Invalid Sensor Type"));
+        return;
+    }
+}
+
+int readSensorDataFromEEPROM(SensorType sensorType, int index)
+{
+    int address, value;
+
+    if (sensorType == ldrSensor)
+    {
+        address = index;              // LDR data starts at 0
+        value = EEPROM.read(address); // Read single byte
+    }
+    else if (sensorType == ultrasonicSensor)
+    {
+        address = maxReadingsPerSensor * 2 + index * 2; // Ultrasonic data follows LDR data
+        byte lowByte = EEPROM.read(address);            // Read low byte
+        byte highByte = EEPROM.read(address + 1);       // Read high byte
+        value = (highByte << 8) | lowByte;              // Combine bytes to form the original value
+    }
+    else
+    {
+        Serial.println(F("Invalid Sensor Type"));
+        return -1; // Return an error or invalid value
+    }
+
+    return value;
+}
+
+///////////////////////////////////////////////////////////////
+
+void performSensorSampling()
+{
+    int ldrValue = analogRead(ldrPin);
+    ldrValue = map(ldrValue, 0, 1023, 0, 255); // Read LDR value
+    int ultrasonicValue = readUltrasonic();    // Read Ultrasonic sensor value
+
+    // Write these values to EEPROM
+    writeSensorDataToEEPROM(ldrSensor, currentLDRIndex, ldrValue);
+    writeSensorDataToEEPROM(ultrasonicSensor, currentUltrasonicIndex, ultrasonicValue);
+
+    // Update indexes for the next write operation
+    updateIndexes();
+}
+
+///////////////////////////////////////////////////////////////
+
+void updateIndexes()
+{
+    // Increment the LDR index and wrap if it reaches the maximum
+    currentLDRIndex = (currentLDRIndex + 1) % maxReadingsPerSensor;
+
+    // Increment the Ultrasonic index and wrap if it reaches the maximum
+    currentUltrasonicIndex = (currentUltrasonicIndex + 1) % maxReadingsPerSensor;
+}
+
+///////////////////////////////////////////////////////////////
+
+void setRGBColor(int red, int green, int blue)
+{
+    analogWrite(redPin, red);
+    analogWrite(greenPin, green);
+    analogWrite(bluePin, blue);
+}
+
+void updateLEDColor()
+{
+    if (isAutoMode)
+    {
+        int ldrValue = analogRead(ldrPin);
+        int ultrasonicValue = readUltrasonic();
+
+        if (ldrValue >= ldrThreshold || ultrasonicValue >= ultrasonicThreshold)
+        {
+            // At least one sensor exceeded its threshold - RED
+            setRGBColor(255, 0, 0);
+        }
+        else if (ldrValue >= ldrThreshold * thresholdMargin || ultrasonicValue >= ultrasonicThreshold * thresholdMargin)
+        {
+            // Sensors are approaching their thresholds - YELLOW
+            setRGBColor(255, 255, 0);
+        }
+        else
+        {
+            // All sensor values are in the safe range - GREEN
+            setRGBColor(0, 255, 0);
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////
 
 void displayMainMenuOptions()
 {
@@ -260,11 +272,6 @@ void displayMainMenuOptions()
         }
         shouldDisplay = true;
     }
-}
-
-void reset()
-{
-    mainMenuIndex = 0;
 }
 
 void showMainMenu()
@@ -293,6 +300,8 @@ void showMainMenu()
         break;
     }
 }
+
+///////////////////////////////////////////////////////////////
 
 void handleSensorSettingsMenu()
 {
@@ -400,6 +409,8 @@ void setLDRThreshold()
     }
 }
 
+///////////////////////////////////////////////////////////////
+
 void handleResetLoggerData()
 {
     static bool shouldDisplay = true;
@@ -445,17 +456,19 @@ void handleResetLoggerData()
     }
 }
 
+///////////////////////////////////////////////////////////////
+
 void displayCurrentSensorReadings()
 {
     Serial.println(F("Current EEPROM Values:"));
 
     // Read and display the current value from EEPROM for the LDR sensor
-    int currentLDRValue = readSensorDataFromEEPROM(LDR_SENSOR, currentLDRIndex);
+    int currentLDRValue = readSensorDataFromEEPROM(ldrSensor, currentLDRIndex);
     Serial.print(F("LDR Value: "));
     Serial.println(currentLDRValue);
 
     // Read and display the current value from EEPROM for the Ultrasonic sensor
-    int currentUltrasonicValue = readSensorDataFromEEPROM(ULTRASONIC_SENSOR, currentUltrasonicIndex);
+    int currentUltrasonicValue = readSensorDataFromEEPROM(ultrasonicSensor, currentUltrasonicIndex);
     Serial.print(F("Ultrasonic Value: "));
     Serial.println(currentUltrasonicValue);
 }
@@ -466,9 +479,9 @@ void displayLoggedData()
 
     // Display LDR Sensor Data
     Serial.println(F("LDR Sensor Data:"));
-    for (int i = 0; i < MAX_READINGS_PER_SENSOR; i++)
+    for (int i = 0; i < maxReadingsPerSensor; i++)
     {
-        int ldrValue = readSensorDataFromEEPROM(LDR_SENSOR, i);
+        int ldrValue = readSensorDataFromEEPROM(ldrSensor, i);
         Serial.print(F("Entry "));
         Serial.print(i);
         Serial.print(F(": "));
@@ -477,9 +490,9 @@ void displayLoggedData()
 
     // Display Ultrasonic Sensor Data
     Serial.println(F("Ultrasonic Sensor Data:"));
-    for (int i = 0; i < MAX_READINGS_PER_SENSOR; i++)
+    for (int i = 0; i < maxReadingsPerSensor; i++)
     {
-        int ultrasonicValue = readSensorDataFromEEPROM(ULTRASONIC_SENSOR, i);
+        int ultrasonicValue = readSensorDataFromEEPROM(ultrasonicSensor, i);
         Serial.print(F("Entry "));
         Serial.print(i);
         Serial.print(F(": "));
@@ -540,6 +553,8 @@ void displayCurrentSensorSettings()
     Serial.println(ldrThreshold);
 }
 
+///////////////////////////////////////////////////////////////
+
 void handleSystemStatusMenu()
 {
     static bool shouldDisplay = true;
@@ -587,6 +602,9 @@ void handleSystemStatusMenu()
         shouldDisplay = true;
     }
 }
+
+///////////////////////////////////////////////////////////////
+
 void manualColorControl()
 {
     int r = getIndividualColorValue("R");
@@ -630,5 +648,4 @@ void toggleAutomaticMode()
     String modeStatus = isAutoMode ? "ON" : "OFF";
     Serial.print(F("Automatic mode "));
     Serial.println(modeStatus);
-    // Additional code to handle automatic mode logic
 }
