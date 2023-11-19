@@ -1,4 +1,3 @@
-#include <Arduino.h>
 // Global variables for sensor settings
 unsigned long sensorSamplingInterval = 5; // Default 5 seconds
 int ultrasonicThreshold = 100;            // Example default threshold in centimeters
@@ -21,6 +20,8 @@ int blueValue = 0;
 
 // Automatic mode flag
 bool isAutoMode = false;
+
+int mainMenuIndex = 0;
 
 // Initialize the log data with dummy values (for testing)
 void initializeLogData()
@@ -50,6 +51,8 @@ void setRGBColor(int red, int green, int blue)
 }
 void loop()
 {
+
+    Serial.println("loop");
     showMainMenu();
 }
 
@@ -87,7 +90,7 @@ String readLine()
     return input;
 }
 
-void showMainMenu()
+void displayMainMenuOptions()
 {
     Serial.println(F("=== Main Menu ==="));
     Serial.println(F("1. Sensor Settings"));
@@ -95,23 +98,35 @@ void showMainMenu()
     Serial.println(F("3. System Status"));
     Serial.println(F("4. RGB LED Control"));
     Serial.println(F("Enter your choice: "));
-
     while (!Serial.available())
     {
         // Wait for user input
     }
 
     String input = readLine();
-    int choice;
 
-    if (!getNumericInput(input, choice))
+    if (!getNumericInput(input, mainMenuIndex))
     {
         Serial.println(F("Invalid choice, please enter a number."));
         return;
     }
+}
 
-    switch (choice)
+void reset()
+{
+    mainMenuIndex = 0;
+}
+
+void showMainMenu()
+{
+
+    Serial.println("sebi");
+    Serial.println(mainMenuIndex);
+    switch (mainMenuIndex)
     {
+    case 0:
+        displayMainMenuOptions();
+        break;
     case 1:
         handleSensorSettingsMenu();
         break;
@@ -126,6 +141,7 @@ void showMainMenu()
         break;
     default:
         Serial.println(F("Invalid choice, try again."));
+        reset();
         break;
     }
 }
@@ -146,7 +162,6 @@ void handleSensorSettingsMenu()
 
     String input = readLine();
     int choice;
-
     if (!getNumericInput(input, choice))
     {
         Serial.println(F("Invalid choice, please enter a number."));
@@ -166,6 +181,7 @@ void handleSensorSettingsMenu()
         break;
     case 4:
         // Go back to the main menu
+        reset();
         return;
     default:
         Serial.println(F("Invalid choice, try again."));
@@ -259,15 +275,18 @@ void handleResetLoggerData()
         // Reset the log data
         initializeLogData();
         Serial.println(F("All data has been deleted."));
+        reset();
     }
     else if (choice == 2)
     {
         // Do nothing, just return to the main menu
         Serial.println(F("Data deletion canceled."));
+        reset();
     }
     else
     {
         Serial.println(F("Invalid choice."));
+        // dont reset
     }
 }
 
@@ -343,6 +362,7 @@ void handleSystemStatusMenu()
         displayLoggedData();
         break;
     case 4:
+        reset();
         // Go back to the main menu
         return;
     default:
@@ -382,6 +402,7 @@ void handleRGBControlMenu()
         toggleAutomaticMode();
         break;
     case 3:
+        reset();
         return; // Go back to the main menu
     default:
         Serial.println(F("Invalid choice, try again."));
