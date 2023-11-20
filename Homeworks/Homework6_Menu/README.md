@@ -27,7 +27,7 @@ The Smart Environment Monitor and Logger is an Arduino-based system designed to 
 - Breadboard and connecting wires
 - Buzzer (Bonus Component)
 - Optional: Additional sensors/components for extended functionality
-  ![Hardware Setup](/Resources/Images/menu-sensor-setup.jpg)
+  <img src="/Resources/Images/menu-sensor-setup.jpg" alt="Hardware Setup" width="300"/>
 
 ## Menu Structure
 
