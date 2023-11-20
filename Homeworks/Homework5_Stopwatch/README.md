@@ -1,6 +1,6 @@
 ## Completed Homework: Stopwatch Timer with Dual 7-Segment Displays
 
-### Deadline Met: November 13th - 19th, 2023
+### Deadline Met: November 14th, 2023
 
 ### [Showcase Video on YouTube](https://youtube.com/shorts/hoOf8aKgjPQ?feature=share)
 
