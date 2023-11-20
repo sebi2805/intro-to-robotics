@@ -224,6 +224,13 @@ void setRGBColor(int red, int green, int blue)
     analogWrite(bluePin, blue);
 }
 
+void setRGBColorValues(int red, int green, int blue)
+{
+    redValue = red;
+    greenValue = green;
+    blueValue = blue;
+}
+
 void updateLEDColor()
 {
     if (isAutoMode)
@@ -236,21 +243,32 @@ void updateLEDColor()
             int frequency = 1000;
             int duration = 500;
 
-            tone(buzzerPin, frequency); // Start playing a tone
-            delay(duration);            // Wait for the duration of the tone
-            noTone(buzzerPin);
+            tone(buzzerPin, frequency);
             setRGBColor(255, 0, 0);
+            redValue = 255;
+            greenValue = 0;
+            blueValue = 0;
         }
         else if (ldrValue >= ldrThreshold * thresholdMargin || ultrasonicValue >= ultrasonicThreshold * thresholdMargin)
         {
             // Sensors are approaching their thresholds - YELLOW
             setRGBColor(255, 255, 0);
+            redValue = 255;
+            greenValue = 255;
+            blueValue = 0;
         }
         else
         {
             // All sensor values are in the safe range - GREEN
             setRGBColor(0, 255, 0);
+            redValue = 0;
+            greenValue = 255;
+            blueValue = 0;
         }
+    }
+    else
+    {
+        setRGBColor(redValue, greenValue, blueValue);
     }
 }
 
@@ -322,9 +340,12 @@ void plotSensorData(SensorType sensorType)
 
     while (!Serial.available() || Serial.read() != 'q')
     {
-        int value = (sensorType == ldrSensor) ? analogRead(ldrPin) : readUltrasonic();
-        Serial.println(value);
-        delay(sensorSamplingInterval);
+        if (millis() - lastSampleTime >= sensorSamplingInterval)
+        {
+            int value = (sensorType == ldrSensor) ? analogRead(ldrPin) : readUltrasonic();
+            Serial.println(value);
+            lastSampleTime = millis();
+        }
 
         if (Serial.available() && Serial.read() == 'q')
         {
@@ -578,6 +599,7 @@ void displayLoggedData()
 void handleRGBControlMenu()
 {
     static bool shouldDisplay = true;
+    static bool shouldReadInput = true;
     if (shouldDisplay)
     {
         Serial.println(F("=== RGB LED Control ==="));
@@ -587,33 +609,44 @@ void handleRGBControlMenu()
         Serial.println(F("Enter your choice: "));
         shouldDisplay = false;
     }
-    if (Serial.available())
+    static int choice = 0;
+    if (Serial.available() && shouldReadInput)
     {
         String input = readLine();
-        int choice;
 
         if (!getNumericInput(input, choice))
         {
             Serial.println(F("Invalid choice, please enter a number."));
             return;
         }
-
-        switch (choice)
+        else
         {
-        case 1:
-            manualColorControl();
-            break;
-        case 2:
-            toggleAutomaticMode();
-            break;
-        case 3:
-            reset();
-            return; // Go back to the main menu
-        default:
-            Serial.println(F("Invalid choice, try again."));
-            break;
+            shouldReadInput = false;
         }
-        shouldDisplay = true;
+    }
+    switch (choice)
+    {
+    case 1:
+        if (manualColorControl())
+        {
+            shouldDisplay = true;
+            shouldReadInput = true;
+            choice = 0;
+        }
+        break;
+    case 2:
+        if (toggleAutomaticMode())
+        {
+            shouldDisplay = true;
+            shouldReadInput = true;
+            choice = 0;
+        };
+        break;
+    case 3:
+        reset();
+        return; // Go back to the main menu
+    default:
+        break;
     }
 }
 void displayCurrentSensorSettings()
@@ -680,34 +713,50 @@ void handleSystemStatusMenu()
 
 ///////////////////////////////////////////////////////////////
 
-void manualColorControl()
+bool manualColorControl()
 {
-    int r = getIndividualColorValue("R");
-    int g = getIndividualColorValue("G");
-    int b = getIndividualColorValue("B");
+    static int r = -1, g = -1, b = -1;
+    if (r == -1)
+        r = getIndividualColorValue("R");
 
-    setRGBColor(r, g, b);
-    Serial.print(F("RGB color set to R:"));
-    Serial.print(r);
-    Serial.print(F(", G:"));
-    Serial.print(g);
-    Serial.print(F(", B:"));
-    Serial.println(b);
+    if (g != -1)
+        b = getIndividualColorValue("B");
+    else if (r != -1)
+        g = getIndividualColorValue("G");
+
+    if (r != -1 && g != -1 && b != -1)
+    {
+        setRGBColorValues(r, g, b);
+        Serial.print(F("RGB color set to R:"));
+        Serial.print(r);
+        Serial.print(F(", G:"));
+        Serial.print(g);
+        Serial.print(F(", B:"));
+        Serial.println(b);
+        r = g = b = -1;
+        return true;
+    }
+    return false;
 }
 
 int getIndividualColorValue(const char *colorName)
 {
-    while (true)
+    static bool shouldDisplay = true;
+    if (shouldDisplay)
     {
         Serial.print(F("Enter "));
         Serial.print(colorName);
         Serial.println(F(" value (0-255):"));
-
+        shouldDisplay = false;
+    }
+    if (Serial.available())
+    {
         String input = readLine();
         int value;
 
         if (getNumericInput(input, value) && value >= 0 && value <= 255)
         {
+            shouldDisplay = true;
             return value;
         }
         else
@@ -715,12 +764,15 @@ int getIndividualColorValue(const char *colorName)
             Serial.println(F("Invalid value. Please enter a number between 0 and 255."));
         }
     }
+    return -1;
 }
 
-void toggleAutomaticMode()
+bool toggleAutomaticMode()
 {
     isAutoMode = !isAutoMode;
     String modeStatus = isAutoMode ? "ON" : "OFF";
     Serial.print(F("Automatic mode "));
     Serial.println(modeStatus);
+
+    return true;
 }
