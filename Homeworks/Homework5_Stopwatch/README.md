@@ -17,7 +17,8 @@
 - **Buzzer**: 1 (For auditory feedback on button interactions)
 - **Shift Register**: 1 (For efficient display control)
 - **Resistors and Wires**: As required for the circuit
-  ![Hardware Setup](/Resources/Images/stopwatch-setup.jpg)
+  <br/>
+  <img src="/Resources/Images/menu-sensor-setup.jpg" alt="Hardware Setup" width="400"/>
 
 #### Button Functionalities
 
