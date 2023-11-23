@@ -1,224 +1,204 @@
-// Pin definitions
-const int startPauseButtonPin = 2; // Start/Pause button
-const int saveLapButtonPin = 3;    // Save Lap button
-const int resetButtonPin = 8;      // Reset button
-const int buzzerPin = 9;           // Buzzer
+#include "LedControl.h"
 
-// Display pins
-const int latchPin = 11; // STCP (latch pin) on the shift register
-const int clockPin = 10; // SHCP (clock pin) on the shift register
-const int dataPin = 12;  // DS (data pin) on the shift register
-
-// Digit number
-const int digit1 = 0;
-const int digit2 = 1;
-const int digit3 = 2;
-const int digit4 = 3;
-const int digit5Lap = 4;
-
-// Segment control pins for a 5-digit display
-const int segD1 = 4;
-const int segD2 = 5;
-const int segD3 = 6;
-const int segD4 = 7;
-const int segD5 = 13; // For the lap index display
-
-// Display configuration
-int displayDigits[] = {segD1, segD2, segD3, segD4, segD5};
-const int displayCount = 5; // Number of digits in the display
-
-// Stopwatch variables
-volatile bool isRunning = false;
-unsigned long lastDebounceTimeStartPause = 0;
-unsigned long lastDebounceTimeSaveLap = 0;
-unsigned long lastUpdateTime = 0;
-unsigned long lapTimes[4] = {0};
-int lapIndex = 0;
-int displayNumber = 0;
-int number = 0;
-
-// Timing constants
-const int debounceDelay = 100;       // Debounce delay in milliseconds
-const unsigned long delayCount = 50; // Delay between display updates in milliseconds
-unsigned long lastIncrement = 0;
-
-// Tone frequencies and durations
-const int resetToneFreq = 1000;         // Frequency for reset tone
-const int resetToneDuration = 200;      // Duration for reset tone
-const int startPauseToneFreq = 800;     // Frequency for start/pause tone
-const int startPauseToneDuration = 150; // Duration for start/pause tone
-const int saveLapToneFreq = 1200;       // Frequency for save lap tone
-const int saveLapToneDuration = 150;    // Duration for save lap tone
-
-// Byte encodings for numbers 0-9 on a 7-segment display
-const int encodingsNumber = 10; // Number of unique encodings
-byte byteEncodings[encodingsNumber] = {
-    B11111100, // 0
-    B01100000, // 1
-    B11011010, // 2
-    B11110010, // 3
-    B01100110, // 4
-    B10110110, // 5
-    B10111110, // 6
-    B11100000, // 7
-    B11111110, // 8
-    B11110110  // 9
+// Define enum for game elements
+enum GameElement {
+  Empty,
+  Player,
+  BulletType,
+  Wall
 };
+enum Direction {
+  Up, Down, Left, Right, None
+};
+struct Bullet {
+  byte x;
+  byte y;
+  Direction direction;
+};
+const int maxBullets = 10;
+Bullet bullets[maxBullets];
+int bulletCount = 0;
+Direction lastDirection = Up;
+// Pins and matrix configuration
+const byte dinPin = 12;
+const byte clockPin = 11;
+const byte loadPin = 10;
+const byte matrixSize = 8;
+LedControl lc = LedControl(dinPin, clockPin, loadPin, 1);
 
-// Function to turn off all digits
+// Matrix state
+GameElement matrix[matrixSize][matrixSize] = {Empty}; // 8x8 matrix of GameElements
 
-void startPauseISR()
-{
-  unsigned long currentTime = millis();
-  if ((currentTime - lastDebounceTimeStartPause) > debounceDelay)
-  {
-    tone(buzzerPin, startPauseToneFreq, startPauseToneDuration);
-    isRunning = !isRunning;
-    lastDebounceTimeStartPause = currentTime;
-  }
+// Player configuration
+byte playerX = 4;
+byte playerY = 4;
+unsigned long playerBlinkInterval = 1000;
+unsigned long lastBlinkTime = 0;
+bool playerVisible = true;
+
+// Joystick configuration
+const int joystickX = A0;
+const int joystickY = A1;
+int joystickCenter = 512;
+int joystickDeadZone = 100;
+bool joystickCentered = true;
+
+// Brightness
+byte matrixBrightness = 2;
+
+void setup() {
+   pinMode(2, INPUT_PULLUP);
+  lc.shutdown(0, false);
+  lc.setIntensity(0, matrixBrightness);
+  lc.clearDisplay(0);
+  matrix[playerY][playerX] = Player; // Initialize player position
 }
 
-void saveLapISR()
-{
-
+void updateMatrix() {
   unsigned long currentTime = millis();
-  if ((currentTime - lastDebounceTimeSaveLap) > debounceDelay)
-  {
-    tone(buzzerPin, saveLapToneFreq, saveLapToneDuration);
-    if (isRunning)
-    {
-      lapTimes[lapIndex] = number;
-      lapIndex = (lapIndex + 1) % 4;
-    }
-    else
-    {
-      lapIndex = (lapIndex + 1) % 4;
-      displayNumber = lapTimes[lapIndex];
-    }
-    // Lap cycling logic will be in the loop
-    lastDebounceTimeSaveLap = currentTime;
-  }
-}
 
-void reset()
-{
-  static unsigned long lastResetButtonPress = 0;
-  if (digitalRead(resetButtonPin) == LOW)
-  {
-    unsigned long currentTime = millis();
-    if (currentTime - lastResetButtonPress > debounceDelay)
-    {
-      tone(buzzerPin, resetToneFreq, resetToneDuration);
-      number = 0;
-      displayNumber = 0;
-      if (!isRunning)
-      {
-        for (int i = 0; i < 4; ++i)
-        {
-          lapTimes[i] = 0;
-        }
+  for (int row = 0; row < matrixSize; row++) {
+    for (int col = 0; col < matrixSize; col++) {
+      bool ledState = false;
+      switch(matrix[row][col]) {
+        case Player:
+          ledState = playerVisible;
+          break;
+        case BulletType:
+          // Implement bullet blinking logic here
+          ledState = (currentTime / 250) % 2; // Example: Fast blinking
+          break;
+        case Wall:
+          ledState = true; // Walls are always visible (not blinking)
+          break;
+        default:
+          ledState = false; // Empty space
       }
+      lc.setLed(0, row, col, ledState);
+    }
+  }
+}
+void shootBullet() {
+  if (bulletCount < maxBullets) {
+    Bullet newBullet;
+    newBullet.x = playerX;
+    newBullet.y = playerY;
+    newBullet.direction = lastDirection;
 
-      lastResetButtonPress = currentTime;
+    // Adjust the initial position based on the direction
+    switch(newBullet.direction) {
+      case Up:
+        if(newBullet.y > 0) newBullet.y--;
+        break;
+      case Down:
+        if(newBullet.y < matrixSize - 1) newBullet.y++;
+        break;
+      case Left:
+        if(newBullet.x > 0) newBullet.x--;
+        break;
+      case Right:
+        if(newBullet.x < matrixSize - 1) newBullet.x++;
+        break;
+      default:
+        break;
+    }
+
+    // Place the bullet if the position is empty
+    if(matrix[newBullet.y][newBullet.x] == Empty) {
+      matrix[newBullet.y][newBullet.x] = BulletType;
+      bullets[bulletCount++] = newBullet;
     }
   }
 }
 
-void setup()
-{
-  // Initialize the pins connected to the shift register as outputs
-  pinMode(latchPin, OUTPUT);
-  pinMode(clockPin, OUTPUT);
-  pinMode(dataPin, OUTPUT);
+void moveBullets() {
+  for (int i = 0; i < bulletCount; i++) {
+    // Save current position
+    byte currentX = bullets[i].x;
+    byte currentY = bullets[i].y;
 
-  // Initialize digit control pins and set them to LOW (off)
-  for (int i = 0; i < displayCount; i++)
-  {
-    pinMode(displayDigits[i], OUTPUT);
-    digitalWrite(displayDigits[i], LOW);
-  }
+    // Calculate next position based on direction
+    switch (bullets[i].direction) {
+      case Up:
+        if (bullets[i].y > 0) bullets[i].y--;
+        break;
+      case Down:
+        if (bullets[i].y < matrixSize - 1) bullets[i].y++;
+        break;
+      case Left:
+        if (bullets[i].x > 0) bullets[i].x--;
+        break;
+      case Right:
+        if (bullets[i].x < matrixSize - 1) bullets[i].x++;
+        break;
+      default:
+        break;
+    }
 
-  // Button pin setups with internal pull-up resistors
-  pinMode(startPauseButtonPin, INPUT_PULLUP);
-  pinMode(resetButtonPin, INPUT_PULLUP);
-  pinMode(saveLapButtonPin, INPUT_PULLUP);
-
-  // Buzzer pin setup
-  pinMode(buzzerPin, OUTPUT);
-
-  // Attach interrupts to the button pins
-  attachInterrupt(digitalPinToInterrupt(startPauseButtonPin), startPauseISR, FALLING);
-  attachInterrupt(digitalPinToInterrupt(saveLapButtonPin), saveLapISR, FALLING);
-
-  // Clear the shift register to avoid ghosting on the display
-  writeReg(byteEncodings[0]);
-
-  // Begin serial communication for debugging purposes
-  Serial.begin(9600);
-}
-
-void loop()
-{
-
-  if (isRunning)
-  {
-    if (millis() - lastIncrement > delayCount)
-    {
-      number++;
-      displayNumber = number % 10000;
-      lastIncrement = millis();
+    // Check for collision with wall or boundary
+    if (bullets[i].x == currentX && bullets[i].y == currentY || // Didn't move (boundary hit)
+        matrix[bullets[i].y][bullets[i].x] == Wall) { // Hit a wall
+      // Remove the bullet
+      matrix[currentY][currentX] = Empty; // Clear the old bullet position
+      bullets[i] = bullets[--bulletCount]; // Replace current bullet with the last one and decrease count
+      i--; // Adjust loop index since bullets array is now shorter
+    } else {
+      // Update matrix with new bullet position
+      matrix[currentY][currentX] = Empty; // Clear the old bullet position
+      matrix[bullets[i].y][bullets[i].x] = BulletType; // Set new bullet position
     }
   }
-  writeNumber(displayNumber);
-  reset();
 }
 
-void writeReg(int digit)
-{
-  // Prepare to shift data by setting the latch pin low
-  digitalWrite(latchPin, LOW);
-  // Shift out the byte representing the current digit to the shift register
-  shiftOut(dataPin, clockPin, MSBFIRST, digit);
-  // Latch the data onto the output pins by setting the latch pin high
-  digitalWrite(latchPin, HIGH);
-}
 
-void activateDisplay(int displayNumber)
-{
-  // Turn off all digit control pins to avoid ghosting
-  for (int i = 0; i < displayCount; i++)
-  {
-    digitalWrite(displayDigits[i], HIGH);
+void loop() {
+  // Player blink logic
+  if (millis() - lastBlinkTime > playerBlinkInterval) {
+    playerVisible = !playerVisible;
+    lastBlinkTime = millis();
   }
-  // Turn on the current digit control pin
-  digitalWrite(displayDigits[displayNumber], LOW);
-}
 
-void writeDigitNumber(int digit, int number, bool decimal = false)
-{
-  writeReg(B00000000);
-  activateDisplay(digit);
-  if (decimal)
-  {
-    writeReg((byteEncodings[number] | B00000001));
+  // Read joystick input
+  int xVal = analogRead(joystickX) - joystickCenter;
+  int yVal = analogRead(joystickY) - joystickCenter;
+
+  // Check if joystick is back in the center
+  if (abs(xVal) < joystickDeadZone && abs(yVal) < joystickDeadZone) {
+    joystickCentered = true;
   }
-  else
-  {
-    writeReg(byteEncodings[number]);
+  if (digitalRead(2) == LOW) {
+    shootBullet();
+    // Debounce delay to prevent multiple bullets on a single press
+    delay(200);
   }
-  delay(0);
-}
+  // Update player position based on joystick input
+  if (joystickCentered) {
+    byte newX = playerX;
+    byte newY = playerY;
 
-void writeNumber(int number)
-{
-  int fourth = number % 10;
-  int third = (number / 10) % 10;
-  int second = (number / 100) % 10;
-  int first = (number / 1000) % 10;
+    if (abs(xVal) > joystickDeadZone) {
+      if (xVal < 0 && playerX > 0) newX--;
+      else if (xVal > 0 && playerX < matrixSize - 1) newX++;
+      joystickCentered = false;
+    }
+    if (abs(yVal) > joystickDeadZone) {
+      if (yVal < 0 && playerY > 0) newY--;
+      else if (yVal > 0 && playerY < matrixSize - 1) newY++;
+      joystickCentered = false;
+    }
 
-  writeDigitNumber(digit1, first);
-  writeDigitNumber(digit2, second);
-  writeDigitNumber(digit3, third, true);
-  writeDigitNumber(digit4, fourth);
-  writeDigitNumber(digit5Lap, lapIndex);
+    if(newX != playerX || newY != playerY) {
+        if(newX > playerX) lastDirection = Right;
+        else if(newX < playerX) lastDirection = Left;
+        else if(newY > playerY) lastDirection = Down;
+        else if(newY < playerY) lastDirection = Up;
+      matrix[playerY][playerX] = Empty; // Clear the old player position
+      playerX = newX;
+      playerY = newY;
+      matrix[playerY][playerX] = Player; // Set the new player position
+    }
+  }
+ moveBullets();
+  updateMatrix(); // Refresh the LED matrix
+  delay(100); // Small delay for stability
 }
