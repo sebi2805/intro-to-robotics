@@ -73,6 +73,22 @@ struct MenuItem
   void (*function)();
 };
 
+void enterName(){};
+void lcdBrightnessControl(){};
+void matrixBrightnessControl(){};
+void soundControl(){};
+void extraSettings(){}; // For additional game or system settings
+const String aboutText = "Game: Space Adventure - By: DevTeam - GitHub: @DevTeam";
+
+MenuItem settingsMenu[] = {
+    {"Enter Name", enterName},
+    {"LCD Brightness", lcdBrightnessControl},
+    {"Matrix Brightness", matrixBrightnessControl},
+    {"Sound", soundControl},
+    {"Extra Settings", extraSettings}};
+int settingsMenuItemCount = sizeof(settingsMenu) / sizeof(MenuItem);
+int settingsCurrentSelection = 0;
+
 // Placeholder functions for menu actions
 void startGame()
 {
@@ -153,6 +169,36 @@ void displayMenu()
 
     lastStartIndex = startIndex;
     lastSelection = currentSelection;
+  }
+}
+void displayAbout()
+{
+  static unsigned long lastScrollTime = 0;
+  const unsigned long scrollDelay = 500; // Delay between scroll steps, in milliseconds
+  static int scrollPosition = 0;
+
+  if (millis() - lastScrollTime > scrollDelay)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+
+    // Display a portion of the aboutText starting from scrollPosition
+    for (int i = 0; i < 16; i++)
+    { // Assuming a 16x2 LCD
+      if (scrollPosition + i < aboutText.length())
+      {
+        lcd.print(aboutText[scrollPosition + i]);
+      }
+    }
+
+    // Update scrollPosition for the next frame
+    scrollPosition++;
+    if (scrollPosition >= aboutText.length())
+    {
+      scrollPosition = 0; // Reset to start after reaching the end
+    }
+
+    lastScrollTime = millis();
   }
 }
 
@@ -527,6 +573,117 @@ void runGame()
   updatePlayerPosition();
 }
 
+void updateSettingsSelection()
+{
+  static unsigned long lastMoveTime = 0;
+  const unsigned long moveDelay = 200; // Delay for debouncing, in milliseconds
+
+  int joystickY = analogRead(joystickYPin);
+
+  if (millis() - lastMoveTime > moveDelay)
+  {
+    if (joystickY > 1023 - THRESHOLD)
+    {
+      // Joystick moved down (reversed to act as up)
+      if (settingsCurrentSelection > 0)
+      {
+        settingsCurrentSelection--;
+        lastMoveTime = millis();
+      }
+      else
+      {
+        settingsCurrentSelection = settingsMenuItemCount - 1; // Loop to the last item
+        lastMoveTime = millis();
+      }
+    }
+    else if (joystickY < THRESHOLD)
+    {
+      // Joystick moved up (reversed to act as down)
+      if (settingsCurrentSelection < settingsMenuItemCount - 1)
+      {
+        settingsCurrentSelection++;
+        lastMoveTime = millis();
+      }
+      else
+      {
+        settingsCurrentSelection = 0; // Loop back to the first item
+        lastMoveTime = millis();
+      }
+    }
+  }
+}
+
+void displaySettingsMenu()
+{
+  static int lastStartIndex = -1;
+  int startIndex = (settingsCurrentSelection > settingsMenuItemCount - 2) ? settingsMenuItemCount - 2 : settingsCurrentSelection;
+  if (startIndex < 0)
+    startIndex = 0;
+
+  if (startIndex != lastStartIndex)
+  {
+    lcd.clear();
+    for (int i = 0; i < 2 && (startIndex + i) < settingsMenuItemCount; i++)
+    {
+      lcd.setCursor(0, i);
+      if (startIndex + i == settingsCurrentSelection)
+      {
+        lcd.print(">");
+      }
+      else
+      {
+        lcd.print(" ");
+      }
+      lcd.print(settingsMenu[startIndex + i].name);
+    }
+
+    if (startIndex > 0)
+    {
+      lcd.setCursor(15, 0);
+      lcd.write(byte(0)); // Upward arrow
+    }
+
+    if (startIndex < settingsMenuItemCount - 2)
+    {
+      lcd.setCursor(15, 1);
+      lcd.write(byte(1)); // Downward arrow
+    }
+
+    lastStartIndex = startIndex;
+  }
+}
+const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
+void displayHowToPlay()
+{
+  static unsigned long lastScrollTime = 0;
+  const unsigned long scrollDelay = 300; // Delay between scroll steps, in milliseconds
+  static int scrollPosition = 0;
+
+  if (millis() - lastScrollTime > scrollDelay)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+
+    // Display a portion of the howToPlayText starting from scrollPosition
+    for (int i = 0; i < 16; i++)
+    { // Assuming a 16x2 LCD
+      if (scrollPosition + i < howToPlayText.length())
+      {
+        lcd.print(howToPlayText[scrollPosition + i]);
+      }
+    }
+
+    // Update scrollPosition for the next frame
+    scrollPosition++;
+    if (scrollPosition >= howToPlayText.length())
+    {
+      scrollPosition = 0; // Reset to start after reaching the end
+    }
+
+    lastScrollTime = millis();
+  }
+}
+
 void loop()
 {
 
@@ -552,7 +709,26 @@ void loop()
     }
     break;
   case SETTINGS:
-    showSettings(); // Placeholder function for settings
+    updateSettingsSelection();
+    displaySettingsMenu();
+    if (joystickButtonPressed())
+    {
+      settingsMenu[settingsCurrentSelection].function();
+    }
+    break;
+  case ABOUT:
+    displayAbout();
+    if (joystickButtonPressed())
+    {
+      currentState = MENU; // Return to main menu on button press
+    }
+    break;
+  case HOW_TO_PLAY:
+    displayHowToPlay();
+    if (joystickButtonPressed())
+    {
+      currentState = MENU; // Return to main menu on button press
+    }
     break;
   }
   delay(1);
