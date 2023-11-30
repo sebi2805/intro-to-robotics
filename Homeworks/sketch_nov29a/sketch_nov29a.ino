@@ -1,11 +1,12 @@
 #include <LedControl.h>
 #include <LiquidCrystal.h>
-
+#include <EEPROM.h>
 // Pins for the MAX7219 matrix
 int DIN = 3;
 int CLK = 4;
 int CS = 5;
-
+#define EEPROM_START_ADDRESS 0 // Starting address in EEPROM
+#define MAX_HIGH_SCORES 3
 const int joystickXPin = A0;
 const int joystickYPin = A1;
 const int buttonPin = 2;
@@ -18,6 +19,7 @@ const int D5_PIN = 11;
 const int D6_PIN = 12;
 const int D7_PIN = 13;
 
+int currentSelection = 0;
 int lastJoystickState = 512; // Center position
 unsigned long lastMoveTime = 0;
 // Initialize the LCD with the interface pins
@@ -46,97 +48,189 @@ byte downArrow[8] = {
 
 // Blinking interval
 const unsigned long BLINK_INTERVAL = 250;
-
+struct HighScoresEntry
+{
+  String playerName;
+  int score;
+};
 // Create a LedControl instance
 LedControl lc = LedControl(DIN, CLK, CS, 1);
+enum ProgramState
+{
+  MENU,
+  GAME,
+  SETTINGS,
+  HIGHSCORES,
+  ABOUT,
+  HOW_TO_PLAY
+};
 
-String menuItems[] = {"Start Game", "Highscore", "Settings", "About", "How to Play"};
+ProgramState currentState = MENU;
+
+struct MenuItem
+{
+  String name;
+  void (*function)();
+};
+
+// Placeholder functions for menu actions
+void startGame()
+{
+  currentState = GAME;
+  // Initialize game variables...
+}
+
+void showSettings()
+{
+  currentState = SETTINGS;
+  // Display and handle settings
+}
+
+void showHighScore()
+{
+  currentState = HIGHSCORES;
+  // Display high scores
+}
+
+void aboutGame()
+{
+  currentState = ABOUT;
+  // Display about game information
+}
+
+void howToPlay()
+{
+  currentState = HOW_TO_PLAY;
+  // Display how to play information
+}
+
+MenuItem mainMenu[] = {
+    {"Start Game", startGame},
+    {"High Score", showHighScore},
+    {"Settings", showSettings},
+    {"About", aboutGame},
+    {"How To Play", howToPlay}};
+
 int menuItemCount = 5;
-int currentSelection = 0;
 
-void displayMenu(int currentSelection, String menuItems[], int menuItemCount)
+void displayMenu()
 {
-  lcd.clear();
+  static int lastStartIndex = -1;
+  static int lastSelection = -1;
+  int startIndex = (currentSelection > menuItemCount - 2) ? menuItemCount - 2 : currentSelection;
+  if (startIndex < 0)
+    startIndex = 0;
 
-  // Determine the start index for display based on current selection
-  int startIndex = (currentSelection >= menuItemCount - 1) ? menuItemCount - 2 : currentSelection;
-
-  // Display two menu items starting from startIndex
-  for (int i = startIndex; i < startIndex + 2 && i < menuItemCount; i++)
+  // Only clear and update the display if there are changes
+  if (startIndex != lastStartIndex || currentSelection != lastSelection)
   {
-    if (i == currentSelection)
+    lcd.clear();
+    for (int i = 0; i < 2 && (startIndex + i) < menuItemCount; i++)
     {
-      // Highlight the selected item
-      lcd.print(">");
+      lcd.setCursor(0, i);
+      if (startIndex + i == currentSelection)
+      {
+        lcd.print(">");
+      }
+      else
+      {
+        lcd.print(" ");
+      }
+      lcd.print(mainMenu[startIndex + i].name);
     }
-    else
+
+    if (startIndex > 0)
     {
-      lcd.print(" ");
+      lcd.setCursor(15, 0);
+      lcd.write(byte(0)); // Upward arrow
     }
-    lcd.print(menuItems[i]);
-    lcd.setCursor(0, i - startIndex + 1); // Move to the next line
-  }
 
-  // Indicate more options above if not at the start
-  if (startIndex > 0)
-  {
-    lcd.setCursor(15, 0); // Position for the upward arrow
-    lcd.write(byte(0));   // Custom character for upward arrow
-  }
+    if (startIndex < menuItemCount - 2)
+    {
+      lcd.setCursor(15, 1);
+      lcd.write(byte(1)); // Downward arrow
+    }
 
-  // Indicate more options below if not at the end
-  if (startIndex < menuItemCount - 2)
-  {
-    lcd.setCursor(15, 1); // Position for the downward arrow
-    lcd.write(byte(1));   // Custom character for downward arrow
+    lastStartIndex = startIndex;
+    lastSelection = currentSelection;
   }
 }
 
-void handleMenuSelection()
+void updateMenuSelection()
 {
-  switch (currentSelection)
-  {
-  case 0:
-    runGame(); // Start the game
-    break;
-  case 1:
-    showHighScore(); // Placeholder function for showing high scores
-    break;
-  case 2:
-    showSettings(); // Placeholder function for settings menu
-    break;
-  case 3:
-    showAbout(); // Placeholder function for about screen
-    break;
-  case 4:
-    showHowToPlay(); // Placeholder function for how to play screen
-    break;
-  }
-}
+  static unsigned long lastMoveTime = 0;
+  const unsigned long moveDelay = 200; // 200 milliseconds delay for debouncing
 
-void navigateMenu()
-{
-  int joystickValue = analogRead(JOYSTICK_Y_PIN);
+  int joystickY = analogRead(joystickYPin);
 
-  // Check for movement only if enough time has passed since the last detected movement
-  if (millis() - lastMoveTime > DEBOUNCE_DELAY)
+  // Check if enough time has passed since the last registered move
+  if (millis() - lastMoveTime > moveDelay)
   {
-    if (joystickValue < 512 - THRESHOLD)
+    if (joystickY > 1023 - THRESHOLD)
     {
-      // Joystick moved up
-      currentSelection = (currentSelection - 1 + menuItemCount) % menuItemCount;
+      // Joystick moved down (reversed to act as up)
+      if (currentSelection > 0)
+      {
+        currentSelection--;
+      }
+      else
+      {
+        currentSelection = menuItemCount - 1; // Wrap around to the last item
+      }
       lastMoveTime = millis();
-      displayMenu(currentSelection);
     }
-    else if (joystickValue > 512 + THRESHOLD)
+    else if (joystickY < THRESHOLD)
     {
-      // Joystick moved down
-      currentSelection = (currentSelection + 1) % menuItemCount;
+      // Joystick moved up (reversed to act as down)
+      if (currentSelection < menuItemCount - 1)
+      {
+        currentSelection++;
+      }
+      else
+      {
+        currentSelection = 0; // Wrap around to the first item
+      }
       lastMoveTime = millis();
-      displayMenu(currentSelection);
     }
   }
 }
+
+bool joystickButtonPressed()
+{
+  static unsigned long lastPress = 0;
+  if (digitalRead(buttonPin) == LOW)
+  {
+    if (millis() - lastPress > DEBOUNCE_DELAY)
+    {
+      lastPress = millis();
+      return true;
+    }
+  }
+  return false;
+}
+// void navigateMenu()
+// {
+//   int joystickValue = analogRead(joystickYPin);
+
+//   // Check for movement only if enough time has passed since the last detected movement
+//   if (millis() - lastMoveTime > DEBOUNCE_DELAY)
+//   {
+//     if (joystickValue < 512 - THRESHOLD)
+//     {
+//       // Joystick moved up
+//       currentSelection = (currentSelection - 1 + menuItemCount) % menuItemCount;
+//       lastMoveTime = millis();
+//       displayMenu(currentSelection);
+//     }
+//     else if (joystickValue > 512 + THRESHOLD)
+//     {
+//       // Joystick moved down
+//       currentSelection = (currentSelection + 1) % menuItemCount;
+//       lastMoveTime = millis();
+//       displayMenu(currentSelection);
+//     }
+//   }
+// }
 // Player struct
 struct Player
 {
@@ -152,6 +246,94 @@ struct Treasure
   bool isVisible;
   unsigned long lastBlinkTime;
 } treasure;
+
+HighScoresEntry highScores[MAX_HIGH_SCORES];
+void saveHighScores(HighScoresEntry scores[], int count)
+{
+  int address = EEPROM_START_ADDRESS;
+  for (int i = 0; i < count; i++)
+  {
+    EEPROM.put(address, scores[i]);
+    address += sizeof(HighScoresEntry);
+  }
+}
+void loadHighScores()
+{
+  int address = EEPROM_START_ADDRESS;
+  for (int i = 0; i < MAX_HIGH_SCORES; i++)
+  {
+    EEPROM.get(address, highScores[i]);
+    address += sizeof(HighScoresEntry);
+  }
+  // Add data integrity check if implemented
+}
+void updateHighScores(int newScore, String playerName)
+{
+  bool scoreUpdated = false;
+  for (int i = 0; i < MAX_HIGH_SCORES; i++)
+  {
+    if (newScore > highScores[i].score)
+    {
+      // Shift down lower scores
+      for (int j = MAX_HIGH_SCORES - 1; j > i; j--)
+      {
+        highScores[j] = highScores[j - 1];
+      }
+      // Insert the new score
+      highScores[i] = {playerName, newScore};
+      scoreUpdated = true;
+      break;
+    }
+  }
+  if (scoreUpdated)
+  {
+    saveHighScores(highScores, MAX_HIGH_SCORES);
+  }
+}
+// Global variables for high score display
+int highScoreStartIndex = 0;
+const int highScoreDisplayCount = 2; // Number of high scores to display at a time
+
+void displayHighScores()
+{
+  static int lastStartIndex = -1;
+
+  // Only clear and update the display if there are changes
+  if (highScoreStartIndex != lastStartIndex)
+  {
+    lcd.clear();
+    for (int i = 0; i < highScoreDisplayCount; i++)
+    {
+      int scoreIndex = highScoreStartIndex + i;
+      if (scoreIndex < MAX_HIGH_SCORES)
+      {
+        lcd.setCursor(0, i);
+        lcd.print(scoreIndex + 1);
+        lcd.print(". ");
+        lcd.print(highScores[scoreIndex].playerName);
+        lcd.print(" - ");
+        lcd.print(highScores[scoreIndex].score);
+      }
+    }
+
+    // Upward arrow
+    if (highScoreStartIndex > 0)
+    {
+      lcd.setCursor(15, 0);
+      lcd.write(byte(0));
+    }
+
+    // Downward arrow
+    if (highScoreStartIndex < MAX_HIGH_SCORES - highScoreDisplayCount)
+    {
+      lcd.setCursor(15, 1);
+      lcd.write(byte(1));
+    }
+
+    lastStartIndex = highScoreStartIndex;
+  }
+}
+
 int virtualMatrix[8][8] = {
     {0, 1, 0, 0, 0, 1, 1, 0},
     {0, 1, 0, 1, 0, 0, 0, 0},
@@ -192,8 +374,9 @@ bool isJoystickNeutral = true;
 
 void updatePlayerPosition()
 {
-  int joystickX = analogRead(joystickXPin);
-  int joystickY = analogRead(joystickYPin);
+  // reversed until further movements of the joystick
+  int joystickY = analogRead(joystickXPin);
+  int joystickX = analogRead(joystickYPin);
 
   // Check if joystick is in the neutral position
   bool joystickNeutral = (abs(joystickX - 512) < JOYSTICK_THRESHOLD) &&
@@ -246,8 +429,16 @@ void updatePlayerPosition()
 // Function to place the treasure at a random position
 void placeTreasure()
 {
-  treasure.x = random(0, 8); // Random X position
-  treasure.y = random(0, 8); // Random Y position
+  int newTreasureX = random(0, 8); // Random X position
+  int newTreasureY = random(0, 8); // Random Y position
+  while (virtualMatrix[newTreasureX][newTreasureY] == 1)
+  {
+    // If the new position is a wall, try again
+    newTreasureX = random(0, 8);
+    newTreasureY = random(0, 8);
+  }
+  treasure.x = newTreasureX; // Random X position
+  treasure.y = newTreasureY; // Random Y position
   treasure.isVisible = true;
   treasure.lastBlinkTime = millis();
 }
@@ -281,6 +472,38 @@ void setup()
   pinMode(buttonPin, INPUT_PULLUP);
 }
 
+void updateHighScoreDisplay()
+{
+  static unsigned long lastMoveTime = 0;
+  const unsigned long moveDelay = 200; // Delay for debouncing, in milliseconds
+
+  // Read the joystick's Y-axis value
+  int joystickY = analogRead(joystickYPin);
+
+  // Ensure enough time has passed since the last registered move (debouncing)
+  if (millis() - lastMoveTime > moveDelay)
+  {
+    if (joystickY < THRESHOLD)
+    {
+      // Joystick moved up
+      if (highScoreStartIndex < MAX_HIGH_SCORES - highScoreDisplayCount)
+      {
+        highScoreStartIndex++;
+        lastMoveTime = millis(); // Update the last move time
+      }
+    }
+    else if (joystickY > 1023 - THRESHOLD)
+    {
+      if (highScoreStartIndex > 0)
+      {
+        highScoreStartIndex--;
+        lastMoveTime = millis(); // Update the last move time
+      }
+      // Joystick moved down
+    }
+  }
+}
+
 void runGame()
 {
   // Game logic...
@@ -306,7 +529,32 @@ void runGame()
 
 void loop()
 {
-  runGame();
+
+  switch (currentState)
+  {
+  case MENU:
+    updateMenuSelection();
+    displayMenu();
+    if (joystickButtonPressed())
+    {
+      mainMenu[currentSelection].function();
+    }
+    break;
+  case GAME:
+    runGame(); // Placeholder function for running the game
+    break;
+  case HIGHSCORES:
+    updateHighScoreDisplay();
+    displayHighScores();
+    if (joystickButtonPressed())
+    {
+      currentState = MENU;
+    }
+    break;
+  case SETTINGS:
+    showSettings(); // Placeholder function for settings
+    break;
+  }
   delay(1);
   // Rest of your game loop...
   // (No delay needed here)
