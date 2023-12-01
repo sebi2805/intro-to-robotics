@@ -248,49 +248,6 @@ MenuItem mainMenu[] = {
 
 int menuItemCount = 5;
 
-void displayMenu()
-{
-  static int lastStartIndex = -1;
-  static int lastSelection = -1;
-  int startIndex = (currentSelection > menuItemCount - 2) ? menuItemCount - 2 : currentSelection;
-  if (startIndex < 0)
-    startIndex = 0;
-
-  // Only clear and update the display if there are changes
-  if (startIndex != lastStartIndex || currentSelection != lastSelection)
-  {
-    lcd.clear();
-    for (int i = 0; i < 2 && (startIndex + i) < menuItemCount; i++)
-    {
-      lcd.setCursor(0, i);
-      if (startIndex + i == currentSelection)
-      {
-        lcd.print(">");
-      }
-      else
-      {
-        lcd.print(" ");
-      }
-      lcd.print(mainMenu[startIndex + i].name);
-    }
-
-    if (startIndex > 0)
-    {
-      lcd.setCursor(15, 0);
-      lcd.write(byte(0)); // Upward arrow
-    }
-
-    if (startIndex < menuItemCount - 2)
-    {
-      lcd.setCursor(15, 1);
-      lcd.write(byte(1)); // Downward arrow
-    }
-
-    lastStartIndex = startIndex;
-    lastSelection = currentSelection;
-  }
-}
-
 bool joystickButtonPressed()
 {
   static unsigned long lastPress = 0;
