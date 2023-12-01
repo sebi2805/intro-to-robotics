@@ -1,19 +1,25 @@
 #include <LedControl.h>
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
+
 // Pins for the MAX7219 matrix
 int DIN = 3;
 int CLK = 4;
 int CS = 5;
-#define EEPROM_START_ADDRESS 0 // Starting address in EEPROM
+
+#define EEPROM_START_ADDRESS 0
 #define MAX_HIGH_SCORES 3
+
 const int joystickXPin = A0;
 const int joystickYPin = A1;
 const int buttonPin = 2;
+
+const int JOYSTICK_THRESHOLD = 512 / 2;
 const int DEBOUNCE_DELAY = 200;
-const int THRESHOLD = 512 / 2;
+
+const int brightnessLcdPin = 9;
 const int RS_PIN = 8;
-const int E_PIN = 9;
+const int E_PIN = 7;
 const int D4_PIN = 10;
 const int D5_PIN = 11;
 const int D6_PIN = 12;
@@ -89,8 +95,7 @@ ProgramState currentState = MENU;
 
 // Assuming brightness is an integer
 
-
-int lcdBrightness = 100;     // Starting brightness value
+int lcdBrightness = 255;     // Starting brightness value
 int brightnessSelection = 0; // 0 for adjusting brightness, 1 for 'Save', 2 for 'Cancel'
 
 void displayLCDBrightnessMenu()
@@ -119,7 +124,7 @@ void updateLCDBrightness()
 {
   int joystickY = analogRead(joystickYPin);
 
-  if (joystickY < THRESHOLD)
+  if (joystickY < JOYSTICK_THRESHOLD)
   {
     // Joystick moved up
     if (brightnessSelection == 0)
@@ -131,7 +136,7 @@ void updateLCDBrightness()
       brightnessSelection--; // Move selection up
     }
   }
-  else if (joystickY > 1023 - THRESHOLD)
+  else if (joystickY > 1023 - JOYSTICK_THRESHOLD)
   {
     // Joystick moved down
     if (brightnessSelection == 0)
@@ -480,7 +485,6 @@ void displayMatrix()
 }
 
 // Threshold for joystick sensitivity
-const int JOYSTICK_THRESHOLD = 512 / 2;
 
 // Variable to track if the joystick was in neutral position
 bool isJoystickNeutral = true;
@@ -564,6 +568,23 @@ void updateTreasureDisplay(unsigned long currentMillis)
     treasure.lastBlinkTime = currentMillis;
   }
 }
+
+void applyLCDBrightness()
+{
+  int pwmValue = map(lcdBrightness, 0, 100, 0, 255); // Assuming lcdBrightness is from 0 to 100
+  analogWrite(brightnessLcdPin, pwmValue);
+}
+void saveLCDBrightness()
+{
+  EEPROM.put(SETTINGS_START_ADDRESS, lcdBrightness);
+  applyLCDBrightness(); // Apply and save the brightness
+}
+
+void loadLCDBrightness()
+{
+  EEPROM.get(SETTINGS_START_ADDRESS, lcdBrightness);
+  applyLCDBrightness(); // Apply the loaded brightness
+}
 void setup()
 {
   randomSeed(analogRead(0));
@@ -583,6 +604,8 @@ void setup()
   pinMode(joystickXPin, INPUT);
   pinMode(joystickYPin, INPUT);
   pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(brightnessLcdPin, OUTPUT);
+  loadLCDBrightness();
 }
 void runGame()
 {
@@ -616,7 +639,7 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
   {
     int direction = 1; // Reverses the logic if needed
 
-    if (joystickY > 1023 - THRESHOLD)
+    if (joystickY > 1023 - JOYSTICK_THRESHOLD)
     {
       currentSelection -= direction;
       if (currentSelection < 0)
@@ -629,7 +652,7 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
       }
       lastMoveTime = millis();
     }
-    else if (joystickY < THRESHOLD)
+    else if (joystickY < JOYSTICK_THRESHOLD)
     {
       currentSelection += direction;
       if (currentSelection < 0)
