@@ -171,75 +171,6 @@ void displayMenu()
     lastSelection = currentSelection;
   }
 }
-void displayAbout()
-{
-  static unsigned long lastScrollTime = 0;
-  const unsigned long scrollDelay = 500; // Delay between scroll steps, in milliseconds
-  static int scrollPosition = 0;
-
-  if (millis() - lastScrollTime > scrollDelay)
-  {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-
-    // Display a portion of the aboutText starting from scrollPosition
-    for (int i = 0; i < 16; i++)
-    { // Assuming a 16x2 LCD
-      if (scrollPosition + i < aboutText.length())
-      {
-        lcd.print(aboutText[scrollPosition + i]);
-      }
-    }
-
-    // Update scrollPosition for the next frame
-    scrollPosition++;
-    if (scrollPosition >= aboutText.length())
-    {
-      scrollPosition = 0; // Reset to start after reaching the end
-    }
-
-    lastScrollTime = millis();
-  }
-}
-
-void updateMenuSelection()
-{
-  static unsigned long lastMoveTime = 0;
-  const unsigned long moveDelay = 200; // 200 milliseconds delay for debouncing
-
-  int joystickY = analogRead(joystickYPin);
-
-  // Check if enough time has passed since the last registered move
-  if (millis() - lastMoveTime > moveDelay)
-  {
-    if (joystickY > 1023 - THRESHOLD)
-    {
-      // Joystick moved down (reversed to act as up)
-      if (currentSelection > 0)
-      {
-        currentSelection--;
-      }
-      else
-      {
-        currentSelection = menuItemCount - 1; // Wrap around to the last item
-      }
-      lastMoveTime = millis();
-    }
-    else if (joystickY < THRESHOLD)
-    {
-      // Joystick moved up (reversed to act as down)
-      if (currentSelection < menuItemCount - 1)
-      {
-        currentSelection++;
-      }
-      else
-      {
-        currentSelection = 0; // Wrap around to the first item
-      }
-      lastMoveTime = millis();
-    }
-  }
-}
 
 bool joystickButtonPressed()
 {
@@ -313,6 +244,50 @@ void loadHighScores()
   }
   // Add data integrity check if implemented
 }
+void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &currentSelection, int displayCount)
+{
+  static int lastStartIndex = -1;
+  static int lastSelection = -1;
+  int startIndex = (currentSelection > menuItemCount - displayCount) ? menuItemCount - displayCount : currentSelection;
+  if (startIndex < 0)
+    startIndex = 0;
+
+  if (startIndex != lastStartIndex || currentSelection != lastSelection)
+  {
+    lcd.clear();
+    for (int i = 0; i < displayCount && (startIndex + i) < menuItemCount; i++)
+    {
+      lcd.setCursor(0, i);
+      if (startIndex + i == currentSelection)
+      {
+        lcd.print(">");
+      }
+      else
+      {
+        lcd.print(" ");
+      }
+      lcd.print(menuItems[startIndex + i].name);
+    }
+
+    // Upward arrow
+    if (startIndex > 0)
+    {
+      lcd.setCursor(15, 0);
+      lcd.write(byte(0));
+    }
+
+    // Downward arrow
+    if (startIndex < menuItemCount - displayCount)
+    {
+      lcd.setCursor(15, 1);
+      lcd.write(byte(1));
+    }
+
+    lastStartIndex = startIndex;
+    lastSelection = currentSelection;
+  }
+}
+
 void updateHighScores(int newScore, String playerName)
 {
   bool scoreUpdated = false;
@@ -518,38 +493,6 @@ void setup()
   pinMode(buttonPin, INPUT_PULLUP);
 }
 
-void updateHighScoreDisplay()
-{
-  static unsigned long lastMoveTime = 0;
-  const unsigned long moveDelay = 200; // Delay for debouncing, in milliseconds
-
-  // Read the joystick's Y-axis value
-  int joystickY = analogRead(joystickYPin);
-
-  // Ensure enough time has passed since the last registered move (debouncing)
-  if (millis() - lastMoveTime > moveDelay)
-  {
-    if (joystickY < THRESHOLD)
-    {
-      // Joystick moved up
-      if (highScoreStartIndex < MAX_HIGH_SCORES - highScoreDisplayCount)
-      {
-        highScoreStartIndex++;
-        lastMoveTime = millis(); // Update the last move time
-      }
-    }
-    else if (joystickY > 1023 - THRESHOLD)
-    {
-      if (highScoreStartIndex > 0)
-      {
-        highScoreStartIndex--;
-        lastMoveTime = millis(); // Update the last move time
-      }
-      // Joystick moved down
-    }
-  }
-}
-
 void runGame()
 {
   // Game logic...
@@ -572,43 +515,41 @@ void runGame()
   displayMatrix();
   updatePlayerPosition();
 }
-
-void updateSettingsSelection()
+void updateMenuNavigation(int &currentSelection, const int menuItemCount)
 {
+  const unsigned long moveDelay = 200;
   static unsigned long lastMoveTime = 0;
-  const unsigned long moveDelay = 200; // Delay for debouncing, in milliseconds
-
   int joystickY = analogRead(joystickYPin);
 
   if (millis() - lastMoveTime > moveDelay)
   {
+    int direction = 1; // Reverses the logic if needed
+
     if (joystickY > 1023 - THRESHOLD)
     {
-      // Joystick moved down (reversed to act as up)
-      if (settingsCurrentSelection > 0)
+      currentSelection -= direction;
+      if (currentSelection < 0)
       {
-        settingsCurrentSelection--;
-        lastMoveTime = millis();
+        currentSelection = menuItemCount - 1;
       }
-      else
+      else if (currentSelection >= menuItemCount)
       {
-        settingsCurrentSelection = settingsMenuItemCount - 1; // Loop to the last item
-        lastMoveTime = millis();
+        currentSelection = 0;
       }
+      lastMoveTime = millis();
     }
     else if (joystickY < THRESHOLD)
     {
-      // Joystick moved up (reversed to act as down)
-      if (settingsCurrentSelection < settingsMenuItemCount - 1)
+      currentSelection += direction;
+      if (currentSelection < 0)
       {
-        settingsCurrentSelection++;
-        lastMoveTime = millis();
+        currentSelection = menuItemCount - 1;
       }
-      else
+      else if (currentSelection >= menuItemCount)
       {
-        settingsCurrentSelection = 0; // Loop back to the first item
-        lastMoveTime = millis();
+        currentSelection = 0;
       }
+      lastMoveTime = millis();
     }
   }
 }
@@ -653,10 +594,10 @@ void displaySettingsMenu()
   }
 }
 const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
-void displayHowToPlay()
+void scrollText(const String &text)
 {
   static unsigned long lastScrollTime = 0;
-  const unsigned long scrollDelay = 300; // Delay between scroll steps, in milliseconds
+  const unsigned long scrollDelay = 500; // Delay between scroll steps, in milliseconds
   static int scrollPosition = 0;
 
   if (millis() - lastScrollTime > scrollDelay)
@@ -664,18 +605,18 @@ void displayHowToPlay()
     lcd.clear();
     lcd.setCursor(0, 0);
 
-    // Display a portion of the howToPlayText starting from scrollPosition
-    for (int i = 0; i < 16; i++)
-    { // Assuming a 16x2 LCD
-      if (scrollPosition + i < howToPlayText.length())
+    // Display a portion of the text starting from scrollPosition
+    for (int i = 0; i < 16; i++) // Assuming a 16x2 LCD
+    {
+      if (scrollPosition + i < text.length())
       {
-        lcd.print(howToPlayText[scrollPosition + i]);
+        lcd.print(text[scrollPosition + i]);
       }
     }
 
     // Update scrollPosition for the next frame
     scrollPosition++;
-    if (scrollPosition >= howToPlayText.length())
+    if (scrollPosition >= text.length())
     {
       scrollPosition = 0; // Reset to start after reaching the end
     }
@@ -690,8 +631,8 @@ void loop()
   switch (currentState)
   {
   case MENU:
-    updateMenuSelection();
-    displayMenu();
+    updateMenuNavigation(currentSelection, menuItemCount);
+    displayGenericMenu(mainMenu, menuItemCount, currentSelection, 2);
     if (joystickButtonPressed())
     {
       mainMenu[currentSelection].function();
@@ -701,7 +642,7 @@ void loop()
     runGame(); // Placeholder function for running the game
     break;
   case HIGHSCORES:
-    updateHighScoreDisplay();
+    updateMenuNavigation(highScoreStartIndex, MAX_HIGH_SCORES);
     displayHighScores();
     if (joystickButtonPressed())
     {
@@ -709,22 +650,22 @@ void loop()
     }
     break;
   case SETTINGS:
-    updateSettingsSelection();
-    displaySettingsMenu();
+    updateMenuNavigation(settingsCurrentSelection, settingsMenuItemCount);
+    displayGenericMenu(settingsMenu, settingsMenuItemCount, settingsCurrentSelection, 2);
     if (joystickButtonPressed())
     {
       settingsMenu[settingsCurrentSelection].function();
     }
     break;
   case ABOUT:
-    displayAbout();
+    scrollText(aboutText);
     if (joystickButtonPressed())
     {
       currentState = MENU; // Return to main menu on button press
     }
     break;
   case HOW_TO_PLAY:
-    displayHowToPlay();
+    scrollText(howToPlayText);
     if (joystickButtonPressed())
     {
       currentState = MENU; // Return to main menu on button press
