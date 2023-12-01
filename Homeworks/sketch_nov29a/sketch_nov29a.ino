@@ -53,6 +53,8 @@ struct HighScoresEntry
   String playerName;
   int score;
 };
+#define SETTINGS_START_ADDRESS (EEPROM_START_ADDRESS + sizeof(HighScoresEntry) * MAX_HIGH_SCORES)
+
 // Create a LedControl instance
 LedControl lc = LedControl(DIN, CLK, CS, 1);
 enum ProgramState
@@ -65,27 +67,139 @@ enum ProgramState
   HOW_TO_PLAY
 };
 
-ProgramState currentState = MENU;
+enum SettingsState
+{
+  SETTINGS_MENU,
+  LCD_BRIGHTNESS,
+  MATRIX_BRIGHTNESS,
+  SOUND
+};
 
 struct MenuItem
 {
   String name;
   void (*function)();
 };
+SettingsState currentStateSettings = SETTINGS_MENU;
+void goBackSettings()
+{
+  currentStateSettings = SETTINGS_MENU;
+};
+ProgramState currentState = MENU;
 
-void enterName(){};
-void lcdBrightnessControl(){};
-void matrixBrightnessControl(){};
-void soundControl(){};
-void extraSettings(){}; // For additional game or system settings
+// Assuming brightness is an integer
+
+
+int lcdBrightness = 100;     // Starting brightness value
+int brightnessSelection = 0; // 0 for adjusting brightness, 1 for 'Save', 2 for 'Cancel'
+
+void displayLCDBrightnessMenu()
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Brightness: ");
+  lcd.print(lcdBrightness);
+
+  lcd.setCursor(0, 1);
+  if (brightnessSelection == 1)
+  {
+    lcd.print(">Save  Cancel");
+  }
+  else if (brightnessSelection == 2)
+  {
+    lcd.print(" Save >Cancel");
+  }
+  else
+  {
+    lcd.print("Save  Cancel");
+  }
+}
+
+void updateLCDBrightness()
+{
+  int joystickY = analogRead(joystickYPin);
+
+  if (joystickY < THRESHOLD)
+  {
+    // Joystick moved up
+    if (brightnessSelection == 0)
+    {
+      lcdBrightness = min(lcdBrightness + 1, 255); // Increase brightness
+    }
+    else
+    {
+      brightnessSelection--; // Move selection up
+    }
+  }
+  else if (joystickY > 1023 - THRESHOLD)
+  {
+    // Joystick moved down
+    if (brightnessSelection == 0)
+    {
+      lcdBrightness = max(lcdBrightness - 1, 0); // Decrease brightness
+    }
+    else
+    {
+      brightnessSelection++; // Move selection down
+    }
+  }
+
+  brightnessSelection = constrain(brightnessSelection, 0, 2); // Keep within bounds
+  displayLCDBrightnessMenu();                                 // Update the display
+}
+
+void handleLCDBrightnessSelection()
+{
+  if (joystickButtonPressed())
+  {
+    if (brightnessSelection == 1)
+    {
+      // Save brightness to EEPROM
+      EEPROM.put(SETTINGS_START_ADDRESS, lcdBrightness);
+      // Optionally, apply the brightness setting to the LCD
+    }
+    else if (brightnessSelection == 2)
+    {
+      // Cancel: Reload the brightness from EEPROM
+      EEPROM.get(SETTINGS_START_ADDRESS, lcdBrightness);
+    }
+
+    // Go back to the previous menu or main settings menu
+    goBackSettings();
+  }
+}
+int matrixBrightness = 100; // Default value
+
+void lcdBrightnessControl()
+{
+  currentStateSettings = LCD_BRIGHTNESS;
+  EEPROM.get(SETTINGS_START_ADDRESS, lcdBrightness);
+}
+void matrixBrightnessControl()
+{
+  currentStateSettings = MATRIX_BRIGHTNESS;
+  EEPROM.get(SETTINGS_START_ADDRESS + sizeof(int), matrixBrightness);
+}
+void displayLCDBrightness()
+{
+  updateLCDBrightness();
+  handleLCDBrightnessSelection();
+}
+void soundControl()
+{
+  currentStateSettings = SOUND;
+};
+void goBack()
+{
+  currentState = MENU;
+}; // For additional game or system settings
 const String aboutText = "Game: Space Adventure - By: DevTeam - GitHub: @DevTeam";
 
 MenuItem settingsMenu[] = {
-    {"Enter Name", enterName},
     {"LCD Brightness", lcdBrightnessControl},
     {"Matrix Brightness", matrixBrightnessControl},
     {"Sound", soundControl},
-    {"Extra Settings", extraSettings}};
+    {"Go back", goBack}};
 int settingsMenuItemCount = sizeof(settingsMenu) / sizeof(MenuItem);
 int settingsCurrentSelection = 0;
 
@@ -185,29 +299,7 @@ bool joystickButtonPressed()
   }
   return false;
 }
-// void navigateMenu()
-// {
-//   int joystickValue = analogRead(joystickYPin);
 
-//   // Check for movement only if enough time has passed since the last detected movement
-//   if (millis() - lastMoveTime > DEBOUNCE_DELAY)
-//   {
-//     if (joystickValue < 512 - THRESHOLD)
-//     {
-//       // Joystick moved up
-//       currentSelection = (currentSelection - 1 + menuItemCount) % menuItemCount;
-//       lastMoveTime = millis();
-//       displayMenu(currentSelection);
-//     }
-//     else if (joystickValue > 512 + THRESHOLD)
-//     {
-//       // Joystick moved down
-//       currentSelection = (currentSelection + 1) % menuItemCount;
-//       lastMoveTime = millis();
-//       displayMenu(currentSelection);
-//     }
-//   }
-// }
 // Player struct
 struct Player
 {
@@ -492,7 +584,6 @@ void setup()
   pinMode(joystickYPin, INPUT);
   pinMode(buttonPin, INPUT_PULLUP);
 }
-
 void runGame()
 {
   // Game logic...
@@ -554,45 +645,6 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
   }
 }
 
-void displaySettingsMenu()
-{
-  static int lastStartIndex = -1;
-  int startIndex = (settingsCurrentSelection > settingsMenuItemCount - 2) ? settingsMenuItemCount - 2 : settingsCurrentSelection;
-  if (startIndex < 0)
-    startIndex = 0;
-
-  if (startIndex != lastStartIndex)
-  {
-    lcd.clear();
-    for (int i = 0; i < 2 && (startIndex + i) < settingsMenuItemCount; i++)
-    {
-      lcd.setCursor(0, i);
-      if (startIndex + i == settingsCurrentSelection)
-      {
-        lcd.print(">");
-      }
-      else
-      {
-        lcd.print(" ");
-      }
-      lcd.print(settingsMenu[startIndex + i].name);
-    }
-
-    if (startIndex > 0)
-    {
-      lcd.setCursor(15, 0);
-      lcd.write(byte(0)); // Upward arrow
-    }
-
-    if (startIndex < settingsMenuItemCount - 2)
-    {
-      lcd.setCursor(15, 1);
-      lcd.write(byte(1)); // Downward arrow
-    }
-
-    lastStartIndex = startIndex;
-  }
-}
 const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
 void scrollText(const String &text)
 {
@@ -625,6 +677,37 @@ void scrollText(const String &text)
   }
 }
 
+void settingsMenuDisplay()
+{
+  switch (currentStateSettings)
+  {
+  case SETTINGS_MENU:
+    updateMenuNavigation(settingsCurrentSelection, settingsMenuItemCount);
+    displayGenericMenu(settingsMenu, settingsMenuItemCount, settingsCurrentSelection, 2);
+    if (joystickButtonPressed())
+    {
+      settingsMenu[settingsCurrentSelection].function();
+    }
+    break;
+  case LCD_BRIGHTNESS:
+    displayLCDBrightness();
+    break;
+  case MATRIX_BRIGHTNESS:
+    // Logic for adjusting matrix brightness
+    if (joystickButtonPressed())
+    {
+      // Perform matrix brightness adjustment
+    }
+    break;
+  case SOUND:
+    // Logic for adjusting sound settings
+    if (joystickButtonPressed())
+    {
+      // Perform sound settings adjustment
+    }
+    break;
+  }
+}
 void loop()
 {
 
@@ -650,12 +733,7 @@ void loop()
     }
     break;
   case SETTINGS:
-    updateMenuNavigation(settingsCurrentSelection, settingsMenuItemCount);
-    displayGenericMenu(settingsMenu, settingsMenuItemCount, settingsCurrentSelection, 2);
-    if (joystickButtonPressed())
-    {
-      settingsMenu[settingsCurrentSelection].function();
-    }
+    settingsMenuDisplay();
     break;
   case ABOUT:
     scrollText(aboutText);
