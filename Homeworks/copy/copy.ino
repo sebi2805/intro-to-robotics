@@ -25,7 +25,7 @@ LiquidCrystal lcd(RS_PIN, E_PIN, D4_PIN, D5_PIN, D6_PIN, D7_PIN);
 // Structures
 struct HighScoresEntry
 {
-    String playerName;
+    char playerName[4]; // 3 characters + 1 for the null terminator
     int score;
 };
 
@@ -171,11 +171,10 @@ const int highScoreDisplayCount = 2; // Number of high scores to display at a ti
 bool soundEnabled = true;            // Default value, can be true or false
 HighScoresEntry highScores[MAX_HIGH_SCORES];
 unsigned long gameStartTime;
-unsigned long timeLimit = 10000;
+unsigned long timeLimit = 5000;
 String playerName = "";
 int playerNameCharIndex = 0;
 int playerNameLength = 0;
-bool isEnteringHighScore = false;
 
 // ------------------------------
 // Function Declarations
@@ -198,7 +197,7 @@ bool joystickButtonPressed();
 void saveHighScores(HighScoresEntry scores[], int count);
 void loadHighScores();
 void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &currentSelection, int displayCount);
-void updateHighScores(int newScore);
+void updateHighScores();
 void displayHighScores();
 void displayMatrix();
 void updatePlayerPosition();
@@ -227,8 +226,9 @@ void saveSoundSettings();
 void loadSoundSettings();
 void displayEndGameMessage();
 void displayEndGameMenu(EndGameOption &lastEndGameOption, EndGameOption endGameOption);
+void clearMatrix();
 EndGameOption handleEndGameControls(EndGameOption &endGameOption, bool &hasEnteredEndGame, unsigned long displayEndTime);
-bool enterPlayerName();
+bool enterPlayerName(bool reset = false);
 // ------------------------------
 MenuItem settingsMenu[] = {
     {"LCD Brightness", lcdBrightnessControl},
@@ -285,8 +285,20 @@ void setup()
     // Game-specific setup
     placeTreasure(); // Place the treasure in the game
     Serial.begin(9600);
+    // formatEEPROM();
 }
 
+void formatEEPROM()
+{
+    HighScoresEntry defaultEntry;
+    memset(defaultEntry.playerName, 0, sizeof(defaultEntry.playerName)); // Set all characters to 0 (null)
+    defaultEntry.score = 0;                                              // Default score
+
+    for (int i = 0; i < MAX_HIGH_SCORES; i++)
+    {
+        EEPROM.put(EEPROM_START_ADDRESS + i * sizeof(HighScoresEntry), defaultEntry);
+    }
+}
 void loop()
 {
     switch (currentState)
@@ -517,7 +529,16 @@ void displayMatrixBrightnessMenu()
         lastBrightnessSelection = brightnessSelection;
     }
 }
-
+void clearMatrix()
+{
+    for (int row = 0; row < 8; row++)
+    {
+        for (int col = 0; col < 8; col++)
+        {
+            lc.setLed(0, row, col, false); // Turn off the LED at row, col
+        }
+    }
+}
 void displayMatrixBrightness()
 {
     handleMatrixBrightnessSelection();
@@ -637,6 +658,7 @@ void goBack()
 void startGame()
 {
     currentState = GAME;
+    gameStartTime = millis();
 }
 
 void showSettings()
@@ -722,22 +744,8 @@ void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &curr
     }
 }
 
-void debugHighScores()
-{
-    Serial.println("Debugging High Scores:");
-    for (int i = 0; i < MAX_HIGH_SCORES; i++)
-    {
-        Serial.print(i + 1);
-        Serial.print(". ");
-        Serial.print(highScores[i].playerName);
-        Serial.print(" - ");
-        Serial.println(highScores[i].score);
-    }
-}
-
 void displayHighScores()
 {
-    debugHighScores();
     static int lastStartIndex = -1;
 
     // Only clear and update the display if there are changes
@@ -884,8 +892,7 @@ void runGame()
     unsigned long currentMillis = millis();
     if (currentMillis - gameStartTime > timeLimit)
     {
-        // Time's up: End game
-        endGame(); // Define this function to handle the end of the game
+        endGame();
         return;
     }
     else
@@ -966,53 +973,57 @@ void displayEndGameMenu(EndGameOption &lastEndGameOption, EndGameOption endGameO
         lcd.print(endGameOption == MAIN_MENU ? (char)2 : ' ');
         lcd.print("Main Menu");
 
-        lastEndGameOption = endGameOption; // Update the last displayed option
+        lastEndGameOption = endGameOption;
     }
 }
 
-EndGameOption handleEndGameControls(EndGameOption &endGameOption, bool &hasEnteredEndGame, unsigned long displayEndTime)
+EndGameOption handleEndGameControls(EndGameOption &endGameOption, bool &hasSelected, unsigned long displayEndTime)
 {
     if (millis() >= displayEndTime)
     {
         // Read joystick input for navigation
-        int joystickX = analogRead(joystickXPin);
+        int joystickY = analogRead(joystickYPin);
 
-        if (joystickX < JOYSTICK_THRESHOLD && endGameOption != RETRY)
+        if (joystickY < JOYSTICK_THRESHOLD && endGameOption != RETRY)
         {
             endGameOption = RETRY;
         }
-        else if (joystickX > 1023 - JOYSTICK_THRESHOLD && endGameOption != MAIN_MENU)
+        else if (joystickY > 1023 - JOYSTICK_THRESHOLD && endGameOption != MAIN_MENU)
         {
             endGameOption = MAIN_MENU;
         }
 
         if (joystickButtonPressed())
         {
-            hasEnteredEndGame = false; // Reset for next time entering end game
-            return endGameOption;      // Return the selected option
+            hasSelected = true;   // Reset for next time entering end game
+            return endGameOption; // Return the selected option
         }
     }
     return endGameOption;
 }
 
-bool enterPlayerName()
+bool enterPlayerName(bool reset = false)
 {
     static bool isJoystickNeutral = true; // Flag to track if the joystick is in the neutral position
+    static char lastDisplayedChar = '\0'; // Variable to track the last displayed character
+
+    if (reset)
+    {
+        isJoystickNeutral = true;
+        lastDisplayedChar = '\1';
+        playerNameCharIndex = 0;
+        // Force an initial display update
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Enter Name:");
+        lcd.setCursor(0, 1);
+        lcd.print(playerName + characters[playerNameCharIndex]);
+        return false; // Exit the function after resetting
+    }
 
     if (playerNameLength < 3)
     {
-        // Update display only if necessary
-        static char lastDisplayedChar = '\0';
         char currentChar = characters[playerNameCharIndex];
-        if (lastDisplayedChar != currentChar)
-        {
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Enter Name:");
-            lcd.setCursor(0, 1);
-            lcd.print(playerName + currentChar);
-            lastDisplayedChar = currentChar;
-        }
 
         // Read joystick input for character selection
         int joystickX = analogRead(joystickXPin);
@@ -1035,19 +1046,33 @@ bool enterPlayerName()
                 playerNameCharIndex = (playerNameCharIndex < numCharacters - 1) ? playerNameCharIndex + 1 : 0;
             }
             isJoystickNeutral = false;
+            currentChar = characters[playerNameCharIndex]; // Update currentChar after joystick movement
+        }
+
+        // Update the display if the current character has changed
+        if (lastDisplayedChar != currentChar)
+        {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Enter Name:");
+            lcd.setCursor(0, 1);
+            lcd.print(playerName + currentChar);
+            lastDisplayedChar = currentChar;
         }
 
         // Confirm character with joystick button
         if (joystickButtonPressed())
         {
-            playerName += characters[playerNameCharIndex];
+            playerName += currentChar;
             playerNameLength++;
             playerNameCharIndex = 0;  // Reset for next character
             isJoystickNeutral = true; // Reset joystick to neutral for next input
+            lastDisplayedChar = '\0'; // Reset last displayed char
 
             if (playerNameLength >= 3)
             {
-                return true; // Name entry complete
+                playerNameLength = 0; // Reset for the next game
+                return true;          // Name entry complete
             }
         }
     }
@@ -1067,9 +1092,9 @@ int checkHighScore(int playerScore)
     }
     return -1; // Player's score does not beat any high score
 }
-void updateHighScores(int playerScore)
+void updateHighScores()
 {
-    int position = checkHighScore(playerScore);
+    int position = checkHighScore(player.points);
     if (position != -1)
     {
         // Shift lower scores down by one position
@@ -1079,9 +1104,16 @@ void updateHighScores(int playerScore)
         }
 
         // Insert the new high score
-        highScores[position].score = playerScore;
-        highScores[position].playerName = enterPlayerName(); // Get player's name
+        if (enterPlayerName())
+        {
+            highScores[position].score = player.points;
 
+            // If playerName is a String, use c_str() to convert to char*
+            strncpy(highScores[position].playerName, playerName.c_str(), sizeof(highScores[position].playerName));
+            // Ensure null termination
+            highScores[position].playerName[sizeof(highScores[position].playerName) - 1] = '\0';
+        }
+        playerName = "";                             // Reset player name for next game
         saveHighScores(highScores, MAX_HIGH_SCORES); // Save the updated scores to EEPROM
     }
 }
@@ -1089,58 +1121,85 @@ void updateHighScores(int playerScore)
 void endGame()
 {
     static bool hasEnteredEndGame = false;
+    static bool hasEnteredEndGameMenu = false;
+    static bool isEnteringHighScore = false;
+    static bool hasSelected = false;
+
     static EndGameOption endGameOption = RETRY;
-    static EndGameOption lastEndGameOption = UNKNOWN; // New variable to track the last displayed option
+    static EndGameOption lastEndGameOption = UNKNOWN;
     static unsigned long displayEndTime = 0;
     const unsigned long displayDuration = 2000; // 2 seconds
 
+    // Step 1: Display End Game Message
     if (!hasEnteredEndGame)
     {
         displayEndGameMessage();
         displayEndTime = millis() + displayDuration; // Set the end time for the display
         hasEnteredEndGame = true;
-        endGameOption = RETRY; // Reset to default option
+        return; // Exit the function to allow the message to display for the full duration
+    }
 
-        // Check if the player's score is a high score
+    // Step 2: Enter Player Name for High Score
+    if (millis() > displayEndTime && !isEnteringHighScore && !hasEnteredEndGameMenu)
+    {
         if (checkHighScore(player.points) != -1)
         {
             isEnteringHighScore = true;
         }
+        else
+        {
+            // No high score, skip to end game menu
+            isEnteringHighScore = false;
+            hasEnteredEndGameMenu = true;
+            return;
+        }
     }
-    else if (isEnteringHighScore)
+
+    if (isEnteringHighScore)
     {
         if (enterPlayerName())
         {
-            // Player has finished entering their name
+            updateHighScores();
 
-            updateHighScores(player.points);
-            // Update high scores with this name
             isEnteringHighScore = false;
-            playerName = "";           // Reset player name for next game
-            hasEnteredEndGame = false; // Reset end game state
+            hasEnteredEndGameMenu = true;
+            return;
         }
     }
-    else
+
+    // Step 3: Display End Game Menu
+    if (hasEnteredEndGameMenu)
     {
-        endGameOption = handleEndGameControls(endGameOption, hasEnteredEndGame, displayEndTime);
-        if (!hasEnteredEndGame)
+        if (!hasSelected)
         {
-            // Perform action based on selected option
-            if (endGameOption == RETRY)
+            endGameOption = handleEndGameControls(endGameOption, hasSelected, displayEndTime);
+            if (endGameOption != lastEndGameOption)
             {
-                lastEndGameOption = UNKNOWN; // Reset the last displayed option
-                restartGame();               // You need to define this function
-            }
-            else
-            {
-                lastEndGameOption = UNKNOWN; // Reset the last displayed option
-                goBack();                    // You need to define this function
+                displayEndGameMenu(lastEndGameOption, endGameOption);
             }
         }
         else
         {
-            displayEndGameMenu(lastEndGameOption, endGameOption);
-            lastEndGameOption = endGameOption;
+            hasEnteredEndGame = false;
+            hasEnteredEndGameMenu = false;
+            isEnteringHighScore = false;
+            hasSelected = false;
+
+            endGameOption = RETRY;
+            lastEndGameOption = UNKNOWN;
+            displayEndTime = 0;
+
+            // Execute the selected option
+            if (endGameOption == RETRY)
+            {
+                enterPlayerName(true);
+                restartGame();
+            }
+            else
+            {
+                goBack();
+                clearMatrix();
+            }
         }
     }
 }
@@ -1165,7 +1224,6 @@ void restartGame()
     // Optionally, clear the display and redraw the initial game state
     lcd.clear();
     displayMatrix(); // Assuming this function draws the initial game state on the matrix
-                     // Additional LCD messages or game state initialization can go here
 }
 
 ////////////////////////////////////////////////////////////////
