@@ -5,25 +5,39 @@
 // ------------------------------
 // Hardware Pin Configuration
 // ------------------------------
-int DIN = 3;
-int CLK = 4;
-int CS = 5;
-int joystickXPin = A0;
-int joystickYPin = A1;
-int buttonPin = 2;
-int brightnessLcdPin = 9;
-int RS_PIN = 8;
-int E_PIN = 7;
-int D4_PIN = 10;
-int D5_PIN = 11;
-int D6_PIN = 12;
-int D7_PIN = 13;
-const int BUZZER_PIN = 6; // Buzzer connected to pin 6
+// Pins for LED Matrix Control
+const int dinPin = 3;
+const int clkPin = 4;
+const int csPin = 5;
 
-LedControl lc = LedControl(DIN, CLK, CS, 1);
-LiquidCrystal lcd(RS_PIN, E_PIN, D4_PIN, D5_PIN, D6_PIN, D7_PIN);
+// Pins for Joystick Control
+const int joystickXPin = A0;
+const int joystickYPin = A1;
+
+// Pin for Button Control
+const int buttonPin = 2;
+
+// Pin for LCD Brightness Control
+const int brightnessLcdPin = 9;
+
+// Pins for Liquid Crystal Display (LCD)
+const int rsPin = 8;
+const int ePin = 7;
+const int d4Pin = 10;
+const int d5Pin = 11;
+const int d6Pin = 12;
+const int d7Pin = 13;
+
+// Pin for Buzzer
+const int buzzerPin = 6; // Buzzer connected to pin 6
+
+LedControl lc = LedControl(dinPin, clkPin, csPin, 1);
+LiquidCrystal lcd(rsPin, ePin, d4Pin, d5Pin, d6Pin, d7Pin);
+
+// ------------------------------
 // Structures
-struct HighScoresEntry
+// ------------------------------
+struct HighscoresEntry
 {
     char playerName[4]; // 3 characters + 1 for the null terminator
     int score;
@@ -51,71 +65,120 @@ struct Treasure
     bool isVisible;
     bool isCollected;
     unsigned long lastBlinkTime;
-    unsigned long spawnTime; // Time when the treasure is placed
+    unsigned long spawnTime; // Time when the treasure is placed needed for computing the actual store
 };
 
 enum ProgramState
 {
-    MENU,
-    GAME,
-    SETTINGS,
-    HIGHSCORES,
-    ABOUT,
-    HOW_TO_PLAY
+    menu,
+    game,
+    settings,
+    highscoresState,
+    about,
+    howToPlayState
 };
 
 enum SettingsState
 {
-    SETTINGS_MENU,
-    LCD_BRIGHTNESS,
-    MATRIX_BRIGHTNESS,
-    SOUND
+    settingsMenuState,
+    lcdBrightnessState,
+    matrixBrightnessState,
+    sound
 };
 enum SoundType
 {
-    MenuNavigationSound,
-    ButtonPressSound,
-    GameStartSound,
-    // Add more sound types as needed
+    menuNavigationSound,
+    buttonPressSound,
+    gameStartSound,
+    introStartSound,
+    outroEndingSound,
+    unknownSound,
+    treasureCollectionSound
 };
 
 enum MenuOptions
 {
-    MENU_YES = 0,
-    MENU_NO = 1,
-    MENU_CANCEL = 2,
-    MENU_SAVE = 3
+    menuYes = 0,
+    menuNo = 1,
+    menuCancel = 2,
+    menuSave = 3,
+    unknownMenuOption = 4
 };
-enum EndGameOption
+enum EndgameOption
 {
-    RETRY = 0,
-    MAIN_MENU = 1,
-    UNKNOWN = 2
+    retry = 0,
+    mainMenuState = 1,
+    unknown = 2
+};
+
+enum SoundState
+{
+    soundOff,
+    soundOn
 };
 
 // ------------------------------
-// Constants and Global Variables
+// Constants Variables
 // ------------------------------
-#define EEPROM_START_ADDRESS 0
-#define MAX_HIGH_SCORES 3
-#define LCD_BRIGHTNESS_ADDRESS (EEPROM_START_ADDRESS + sizeof(HighScoresEntry) * MAX_HIGH_SCORES)
-#define MATRIX_BRIGHTNESS_ADDRESS (LCD_BRIGHTNESS_ADDRESS + sizeof(int))
-#define SOUND_SETTING_ADDRESS (MATRIX_BRIGHTNESS_ADDRESS + sizeof(int))
-#define JOYSTICK_THRESHOLD 512 / 2
-#define DEBOUNCE_DELAY 200
-#define BLINK_INTERVAL 250
-#define WORLD_SIZE 16
-#define MAX_TREASURES 4
+
+// High Score Settings
+const int maxHighScores = 3;
+const int highScoreDisplayCount = 2; // Number of high scores to display at a time
+
+// EEPROM Addresses
+const int eepromStartAddress = 0;
+const int lcdBrightnessAddress = eepromStartAddress + sizeof(HighscoresEntry) * maxHighScores;
+const int matrixBrightnessAddress = lcdBrightnessAddress + sizeof(int);
+const int soundSettingAddress = matrixBrightnessAddress + sizeof(int);
+
+// Game Configuration
+const int worldSize = 16;
+const int maxTreasures = 4;
+
+// Joystick Settings
+const int joystickThreshold = 512 / 2;
+
+// Timing Constants
+const int debounceDelay = 200;
+const int blinkInterval = 250;
+
+// Buzzer Sounds for Game Events
+const int buzzerMoveFrequency = 1000; // Frequency of the buzzer sound in Hertz
+const int buzzerMoveDuration = 50;
+const int buttonPressFrequency = 1500; // Frequency for button press sound
+const int buttonPressDuration = 100;
+
+// Constants for the Intro Sound
+const int introSoundFrequencies[] = {440, 554, 659, 880};                // Example frequencies in Hz (A4, C#5, E5, A5)
+const int introSoundDurations[] = {100, 100, 100, 300};                  // Durations in milliseconds
+const int introSoundNotes = sizeof(introSoundFrequencies) / sizeof(int); // Number of notes
+
+// Constants for the Game Start Sound
+const int gameStartFrequencies[] = {523, 587, 659, 698, 784, 880, 988, 1047}; // Frequencies in Hz (C5, D5, E5, F5, G5, A5, B5, C6)
+const int gameStartDurations[] = {100, 100, 100, 100, 100, 100, 100, 300};    // Durations in milliseconds
+const int gameStartNotes = sizeof(gameStartFrequencies) / sizeof(int);        // Number of notes
+
+// Constants for the Sad Ending Outro Sound
+const int outroSoundFrequencies[] = {659, 587, 523, 440};                // Frequencies in Hz (E5, D5, C5, A4)
+const int outroSoundDurations[] = {300, 300, 300, 600};                  // Durations in milliseconds (longer to convey sadness)
+const int outroSoundNotes = sizeof(outroSoundFrequencies) / sizeof(int); // Number of notes
+
+// Constants for the Treasure Collection Sound
+const int treasureCollectionFrequencies[] = {880, 988, 1047};                            // Frequencies in Hz (A5, B5, C6)
+const int treasureCollectionDurations[] = {50, 50, 100};                                 // Short, quick durations in milliseconds
+const int treasureCollectionNotes = sizeof(treasureCollectionFrequencies) / sizeof(int); // Number of notes
 
 // ------------------------------
 // Text Constants
-const String aboutText = "Game: Space Adventure - By: DevTeam - GitHub: @DevTeam";
+// ------------------------------
+const String aboutText = "game: Space Adventure - By: DevTeam - GitHub: @DevTeam";
 const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
 const char characters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const String introMessage = "Welcome to Treasure Quest! Let the adventure begin!";
 const int numCharacters = sizeof(characters) - 1; // -1 for the null terminator
 
+// ------------------------------
 // Custom characters
+// ------------------------------
 byte upArrow[8] = {
     0b00100,
     0b01110,
@@ -176,7 +239,7 @@ byte starChar[8] = {
 
 byte menuLogo[8] = {
     0b00001000,
-    0b00110000,
+    0b00011000,
     0b00111100,
     0b01111110,
     0b01000010,
@@ -185,61 +248,59 @@ byte menuLogo[8] = {
     0b01111110};
 
 byte gameLogo[8] = {
-    0b00001000, //    *
-    0b00011000, //   **
-    0b00111000, //  ***
-    0b00111110, // *****
-    0b00111000, //  ***
-    0b00011000, //   **
-    0b00001000, //    *
-    0b00000000  // (empty row)
-};
+    0b00001000,
+    0b00011000,
+    0b00111000,
+    0b00111110,
+    0b00111000,
+    0b00011000,
+    0b00001000,
+    0b00000000};
 
 byte settingsLogo[8] = {
-    0b00000000, // (empty row)
-    0b00100100, //   *   *
-    0b01011010, //  * ** *
-    0b11111111, // ********
-    0b01111110, //  ******
-    0b01011010, //  * ** *
-    0b00100100, //   *   *
-    0b00000000  // (empty row)
-};
+    0b00000000,
+    0b00100100,
+    0b01011010,
+    0b11111111,
+    0b01111110,
+    0b01011010,
+    0b00100100,
+    0b00000000};
 
-byte highScoresLogo[8] = {
-    0b00011000, //    **
-    0b00011000, //    **
-    0b00111100, //   ****
-    0b01111110, //  ******
-    0b11111111, // ********
-    0b00111100, //   ****
-    0b00111100, //   ****
-    0b01011010  //  * ** *
-};
+byte highscoresLogo[8] = {
+    0b00011000,
+    0b00011000,
+    0b00111100,
+    0b01111110,
+    0b11111111,
+    0b00111100,
+    0b00111100,
+    0b01011010};
 
 byte aboutLogo[8] = {
-    0b00000000, // (empty row)
-    0b00011000, //    **
-    0b00100100, //   *  *
-    0b01000010, //  *    *
-    0b01111110, //  ******
-    0b01000010, //  *    *
-    0b01000010, //  *    *
-    0b01000010  //  *    *
-};
+    0b00000000,
+    0b00011000,
+    0b00100100,
+    0b01000010,
+    0b01111110,
+    0b01000010,
+    0b01000010,
+    0b01000010};
 
 byte howToPlayLogo[8] = {
-    0b00011000, //    **
-    0b00100100, //   *  *
-    0b01000010, //  *    *
-    0b00000010, //       *
-    0b00000100, //      *
-    0b00011000, //    **
-    0b00000000, //  (empty)
-    0b00011000  //    **
-};
+    0b00011000,
+    0b00100100,
+    0b01000010,
+    0b00000010,
+    0b00000100,
+    0b00011000,
+    0b00000000,
+    0b00011000};
 
-int virtualMatrix[WORLD_SIZE][WORLD_SIZE] = {
+// ------------------------------
+// Virtual World
+// ------------------------------
+int virtualMatrix[worldSize][worldSize] = {
     {0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0},
     {0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
     {0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0},
@@ -248,7 +309,6 @@ int virtualMatrix[WORLD_SIZE][WORLD_SIZE] = {
     {0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1},
     {0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0},
     {1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0},
-
     {1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0},
     {0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
     {0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1},
@@ -258,44 +318,55 @@ int virtualMatrix[WORLD_SIZE][WORLD_SIZE] = {
     {0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0},
     {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0}};
 
-// Global Variables
-unsigned long introStartTime = 0;
+// Game State Variables
+ProgramState currentState = menu;
+SettingsState currentStatesettings = settingsMenuState;
+unsigned long gameStartTime;
+bool gameStarted = true;
+unsigned long timeLimit = 30000;
 bool introDisplayed = false;
+unsigned long introStartTime = 0;
+
+// Player and High Score Variables
+String playerName = "";
+int playerNameCharIndex = 0;
+int playerNameLength = 0;
+int highscorestartIndex = 0;
+HighscoresEntry highscores[maxHighScores];
+
+// Joystick and Selection Variables
 int joystickCenter = 512;
 int currentSelection = -1;
 int settingsCurrentSelection = -1;
 int lastJoystickState = joystickCenter; // Center position
 unsigned long lastMoveTime = 0;
-int lcdBrightness = 255;     // Starting brightness value
-int brightnessSelection = 1; // 0 for adjusting brightness, 1 for 'Save', 2 for 'Cancel'
-int matrixBrightness = 15;   // Default value
-ProgramState currentState = MENU;
-SettingsState currentStateSettings = SETTINGS_MENU;
-int highScoreStartIndex = 0;
-const int BUZZER_FREQUENCY = 1000; // Frequency of the buzzer sound in Hertz
-const int BUZZER_DURATION = 50;
-const int BUTTON_PRESS_FREQUENCY = 1500; // Frequency for button press sound
-const int BUTTON_PRESS_DURATION = 100;
-// Constants for the game start sound
-const int GAME_START_FREQUENCIES[] = {440, 554, 659, 880};                 // Example frequencies in Hz (A4, C#5, E5, A5)
-const int GAME_START_DURATIONS[] = {100, 100, 100, 300};                   // Durations in milliseconds
-const int GAME_START_NOTES = sizeof(GAME_START_FREQUENCIES) / sizeof(int); // Number of notes
 
-const int highScoreDisplayCount = 2; // Number of high scores to display at a time
-bool soundEnabled = true;            // Default value, can be true or false
-HighScoresEntry highScores[MAX_HIGH_SCORES];
-unsigned long gameStartTime;
-unsigned long timeLimit = 120000;
-String playerName = "";
-int playerNameCharIndex = 0;
-int playerNameLength = 0;
-Treasure treasures[MAX_TREASURES];
+// Display and Brightness Variables
+int lcdBrightness = 255;                             // Starting brightness value
+MenuOptions brightnessSelection = unknownMenuOption; // 0 for adjusting brightness, 1 for 'Save', 2 for 'Cancel'
+int matrixBrightness = 15;                           // Default value
+
+int lastLcdBrightness = -1;
+int lastMatrixBrightness = -1;
+int lastBrightnessSelection = -1;
+
+// Sound Settings
+bool soundEnabled = true; // Default value, can be true or false
+SoundState soundState = soundOff;
+bool playOutroSound = true;
+SoundType lastSound = unknownSound;
+unsigned long soundStartTime;
+int noteIndex = 0;
+
+// Game Elements
+Treasure treasures[maxTreasures];
 
 // ------------------------------
 // Function Declarations
 // ------------------------------
-void goBackSettings();
-void displayLCDBrightnessMenu();
+// Settings and Configuration Functions
+void goBacksettings();
+void displayLCDBrightnessmenu();
 void updateLCDBrightness();
 void handleLCDBrightnessSelection();
 void lcdBrightnessControl();
@@ -303,54 +374,69 @@ void matrixBrightnessControl();
 void displayLCDBrightness();
 void soundControl();
 void goBack();
-void startGame();
+
+// Game Control Functions
+void startgame();
+void runGame();
+void endgame();
+void restartgame();
+void updatePlayerPosition();
+void checkTreasureCollection();
+void placeTreasures();
+
+// Display Functions
 void showSettings();
 void showHighScore();
 void aboutGame();
 void howToPlay();
-bool joystickButtonPressed();
-void saveHighScores(HighScoresEntry scores[], int count);
-void loadHighScores();
 void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &currentSelection, int displayCount);
-bool updateHighScores();
-void displayHighScores();
+void displayhighscores();
 void displayMatrix();
 void displayIntroMessage();
-void updatePlayerPosition();
-void placeTreasures();
 void updateTreasureDisplay(unsigned long currentMillis);
+void scrollText(const String &text);
+void settingsmenuDisplay();
+void displayMatrixBrightnessmenu();
+void displayEndgameMessage();
+void displayStateLogo();
+
+// Brightness and Sound Settings
 void applyLCDBrightness();
 void saveLCDBrightness();
 void loadLCDBrightness();
-void runGame();
-void endGame();
-void restartGame();
-void updateMenuNavigation(int &currentSelection, const int menuItemCount);
-void scrollText(const String &text);
-void settingsMenuDisplay();
-void displayMatrixBrightnessMenu();
-void updateMatrixBrightness();
 void applyMatrixBrightness();
-void restartPlayer();
 void previewMatrixBrightness();
 void saveMatrixBrightness();
 void loadMatrixBrightness();
 void displayMatrixBrightness();
 void handleMatrixBrightnessSelection();
 void playSound(SoundType sound);
-void toggleSoundSettings();
-void saveSoundSettings();
-void loadSoundSettings();
-void displayEndGameMessage();
-bool isTreasureInCurrentRoom(int treasureIndex);
-void checkTreasureCollection();
-void displayEndGameMenu(EndGameOption &lastEndGameOption, EndGameOption endGameOption);
+void updateSound();
+void togglesoundsettings();
+void savesoundsettings();
+void loadsoundsettings();
+
+// High Score Functions
+void saveHighscores(HighscoresEntry scores[], int count);
+void loadhighscores();
+bool updateHighscores();
+
+// Game Logic and Navigation
+void updateMenuNavigation(int &currentSelection, const int menuItemCount);
+void restartPlayer();
+void displayEndgameMenu(EndgameOption &lastEndgameOption, EndgameOption endgameOption);
 void clearMatrix();
 int countUncollectedTreasures();
-EndGameOption handleEndGameControls(EndGameOption endGameOption, bool &hasEnteredEndGame, unsigned long displayEndTime);
+EndgameOption handleEndgameControls(EndgameOption endgameOption, bool &hasEnteredEndgame, unsigned long displayEndTime);
 bool enterPlayerName(bool reset = false);
 bool isUncollectedTreasureAt(int x, int y);
-void displayStateLogo();
+
+// Utility Functions
+bool joystickButtonPressed();
+bool isTreasureInCurrentRoom(int treasureIndex);
+
+// ------------------------------
+// Menu Items
 // ------------------------------
 MenuItem settingsMenu[] = {
     {"LCD Brightness", lcdBrightnessControl},
@@ -362,7 +448,7 @@ int settingsMenuItemCount = sizeof(settingsMenu) / sizeof(MenuItem);
 // ------------------------------
 
 MenuItem mainMenu[] = {
-    {"Start Game", startGame},
+    {"Start game", startgame},
     {"High Score", showHighScore},
     {"Settings", showSettings},
     {"About", aboutGame},
@@ -403,11 +489,11 @@ void setup()
     // Load settings
     loadMatrixBrightness(); // Load matrix brightness from EEPROM
     loadLCDBrightness();    // Load LCD brightness from EEPROM
-    loadSoundSettings();
-    loadHighScores();
+    loadsoundsettings();
+    loadhighscores();
 
     analogWrite(brightnessLcdPin, lcdBrightness);
-    // Game-specific setup
+    // game-specific setup
     placeTreasures(); // Place the treasure in the game
     // Serial.begin(9600);
     // formatEEPROM();
@@ -415,13 +501,13 @@ void setup()
 
 void formatEEPROM()
 {
-    HighScoresEntry defaultEntry;
+    HighscoresEntry defaultEntry;
     memset(defaultEntry.playerName, 0, sizeof(defaultEntry.playerName)); // Set all characters to 0 (null)
     defaultEntry.score = 0;                                              // Default score
 
-    for (int i = 0; i < MAX_HIGH_SCORES; i++)
+    for (int i = 0; i < maxHighScores; i++)
     {
-        EEPROM.put(EEPROM_START_ADDRESS + i * sizeof(HighScoresEntry), defaultEntry);
+        EEPROM.put(eepromStartAddress + i * sizeof(HighscoresEntry), defaultEntry);
     }
 }
 void loop()
@@ -430,7 +516,7 @@ void loop()
     {
         switch (currentState)
         {
-        case MENU:
+        case menu:
             updateMenuNavigation(currentSelection, menuItemCount);
             displayGenericMenu(mainMenu, menuItemCount, currentSelection, 2);
 
@@ -439,21 +525,21 @@ void loop()
                 mainMenu[currentSelection].function();
             }
             break;
-        case GAME:
+        case game:
             runGame(); // Placeholder function for running the game
             break;
-        case HIGHSCORES:
-            updateMenuNavigation(highScoreStartIndex, MAX_HIGH_SCORES);
-            displayHighScores();
+        case highscoresState:
+            updateMenuNavigation(highscorestartIndex, maxHighScores);
+            displayhighscores();
 
             break;
-        case SETTINGS:
-            settingsMenuDisplay();
+        case settings:
+            settingsmenuDisplay();
             break;
-        case ABOUT:
+        case about:
             scrollText(aboutText);
             break;
-        case HOW_TO_PLAY:
+        case howToPlayState:
             scrollText(howToPlayText);
             break;
         }
@@ -461,15 +547,16 @@ void loop()
     }
     else
         displayIntroMessage();
+    updateSound();
     delay(1);
 }
 
 // ------------------------------
 // Function Implementations
-void goBackSettings()
+void goBacksettings()
 {
     settingsCurrentSelection = -1;
-    currentStateSettings = SETTINGS_MENU;
+    currentStatesettings = settingsMenuState;
 };
 ////////////////////////////////////////////////////////////////
 bool joystickButtonPressed()
@@ -477,10 +564,10 @@ bool joystickButtonPressed()
     static unsigned long lastPress = 0;
     if (digitalRead(buttonPin) == LOW)
     {
-        if (millis() - lastPress > DEBOUNCE_DELAY)
+        if (millis() - lastPress > debounceDelay)
         {
             lastPress = millis();
-            playSound(ButtonPressSound); // Play a different sound
+            playSound(buttonPressSound); // Play a different sound
             return true;
         }
     }
@@ -488,15 +575,16 @@ bool joystickButtonPressed()
 }
 
 ////////////////////////////////////////////////////////////////
-void displayLCDBrightnessMenu()
+
+void displayLCDBrightnessmenu()
 {
-    static int lastLcdBrightness = -1;
-    static int lastBrightnessSelection = -1;
 
     // Clear the LCD and force update on the first call
     if (lastLcdBrightness == -1 && lastBrightnessSelection == -1)
     {
         lcd.clear();
+        lastLcdBrightness = lcdBrightness - 1;             // Force update
+        lastBrightnessSelection = brightnessSelection - 1; // Force update
     }
 
     // Update the brightness value if it has changed
@@ -513,12 +601,12 @@ void displayLCDBrightnessMenu()
     if (lastBrightnessSelection != brightnessSelection)
     {
         lcd.setCursor(0, 1);
-        if (brightnessSelection == 1)
+        if (brightnessSelection == menuSave)
         {
             lcd.print((char)2); // Right arrow
             lcd.print("Save  Cancel");
         }
-        else if (brightnessSelection == 2)
+        else if (brightnessSelection == menuCancel)
         {
             lcd.print("Save  ");
             lcd.print((char)2); // Right arrow
@@ -537,7 +625,7 @@ void updateLCDBrightness()
     int joystickY = analogRead(joystickYPin);
     int joystickX = analogRead(joystickXPin);
     // Check if the joystick is moved significantly from the center
-    if (abs(joystickY - joystickCenter) > JOYSTICK_THRESHOLD)
+    if (abs(joystickY - joystickCenter) > joystickThreshold)
     {
         if (joystickY < joystickCenter)
         {
@@ -552,17 +640,17 @@ void updateLCDBrightness()
         applyLCDBrightness(); // Apply the brightness to the LCD immediately
     }
     // Adjust selection based on left/right movement
-    else if (joystickX < JOYSTICK_THRESHOLD)
+    else if (joystickX < joystickThreshold)
     {
-        brightnessSelection = 1; // Select "Save"
+        brightnessSelection = menuSave; // Select "Save"
     }
-    else if (joystickX > 1023 - JOYSTICK_THRESHOLD)
+    else if (joystickX > 1023 - joystickThreshold)
     {
-        brightnessSelection = 2; // Select "Cancel"
+        brightnessSelection = menuCancel; // Select "Cancel"
     }
 
     // Update the display
-    displayLCDBrightnessMenu();
+    displayLCDBrightnessmenu();
 }
 
 void handleLCDBrightnessSelection()
@@ -570,36 +658,38 @@ void handleLCDBrightnessSelection()
 
     if (joystickButtonPressed())
     {
-        if (brightnessSelection == 1)
+        lastLcdBrightness = -1;
+        lastBrightnessSelection = -1;
+        if (brightnessSelection == menuSave)
         {
             // Save brightness to EEPROM
-            EEPROM.put(LCD_BRIGHTNESS_ADDRESS, lcdBrightness);
+            EEPROM.put(lcdBrightnessAddress, lcdBrightness);
             applyLCDBrightness();
         }
-        else if (brightnessSelection == 2)
+        else if (brightnessSelection == menuCancel)
         {
             // Cancel: Reload the brightness from EEPROM
-            EEPROM.get(LCD_BRIGHTNESS_ADDRESS, lcdBrightness);
+            EEPROM.get(lcdBrightnessAddress, lcdBrightness);
             applyLCDBrightness();
         }
 
+        brightnessSelection = unknownMenuOption;
         // Reset selection and go back to the previous menu
-        brightnessSelection = 1;
-        goBackSettings();
+        goBacksettings();
     }
 }
 
 void lcdBrightnessControl()
 {
-    currentStateSettings = LCD_BRIGHTNESS;
-    EEPROM.get(LCD_BRIGHTNESS_ADDRESS, lcdBrightness);
+    currentStatesettings = lcdBrightnessState;
+    EEPROM.get(lcdBrightnessAddress, lcdBrightness);
 }
 
 void displayLCDBrightness()
 {
 
-    handleLCDBrightnessSelection();
     updateLCDBrightness();
+    handleLCDBrightnessSelection();
 }
 void applyLCDBrightness()
 {
@@ -608,20 +698,18 @@ void applyLCDBrightness()
 }
 void saveLCDBrightness()
 {
-    EEPROM.put(LCD_BRIGHTNESS_ADDRESS, lcdBrightness);
+    EEPROM.put(lcdBrightnessAddress, lcdBrightness);
     applyLCDBrightness(); // Apply and save the brightness
 }
 
 void loadLCDBrightness()
 {
-    EEPROM.get(LCD_BRIGHTNESS_ADDRESS, lcdBrightness);
+    EEPROM.get(lcdBrightnessAddress, lcdBrightness);
     applyLCDBrightness();
 }
 ////////////////////////////////////////////////////////////////
-void displayMatrixBrightnessMenu()
+void displayMatrixBrightnessmenu()
 {
-    static int lastMatrixBrightness = -1;
-    static int lastBrightnessSelection = -1;
 
     // Clear the LCD and force update on the first call
     if (lastMatrixBrightness == -1 && lastBrightnessSelection == -1)
@@ -640,7 +728,7 @@ void displayMatrixBrightnessMenu()
 
         if (matrixBrightness < 10)
         {
-            lcd.print('0'); // Print leading zero for single-digit numbers
+            lcd.print('0'); // Print leadinPing zero for single-digit numbers
         }
         lcd.print(matrixBrightness);
 
@@ -651,9 +739,9 @@ void displayMatrixBrightnessMenu()
     if (lastBrightnessSelection != brightnessSelection)
     {
         lcd.setCursor(0, 1);
-        lcd.print(brightnessSelection == 1 ? (char)2 : ' '); // Right arrow for 'Save'
+        lcd.print(brightnessSelection == menuSave ? (char)2 : ' '); // Right arrow for 'Save'
         lcd.print("Save  ");
-        lcd.print(brightnessSelection == 2 ? (char)2 : ' '); // Right arrow for 'Cancel'
+        lcd.print(brightnessSelection == menuCancel ? (char)2 : ' '); // Right arrow for 'Cancel'
         lcd.print("Cancel");
         lastBrightnessSelection = brightnessSelection;
     }
@@ -670,8 +758,8 @@ void clearMatrix()
 }
 void displayMatrixBrightness()
 {
-    handleMatrixBrightnessSelection();
     updateMatrixBrightness();
+    handleMatrixBrightnessSelection();
 };
 
 void handleMatrixBrightnessSelection()
@@ -685,21 +773,23 @@ void handleMatrixBrightnessSelection()
 
     if (joystickButtonPressed()) // Assuming you have a function to check if the joystick button is pressed
     {
-        if (brightnessSelection == 1) // 'Save' selected
+        lastBrightnessSelection = -1;
+        lastMatrixBrightness = -1;
+        if (brightnessSelection == menuSave) // 'Save' selected
         {
             saveMatrixBrightness();
             applyMatrixBrightness(); // Apply and save the brightness setting
             hasEntered = false;
         }
-        else if (brightnessSelection == 2) // 'Cancel' selected
+        else if (brightnessSelection == menuCancel) // 'Cancel' selected
         {
             loadMatrixBrightness();  // Reload the brightness from EEPROM
             applyMatrixBrightness(); // Apply the reloaded brightness setting
             hasEntered = false;
         }
 
+        brightnessSelection = unknownMenuOption;
         // Reset selection and possibly go back to the previous menu
-        brightnessSelection = 1;
         // Other actions to return to the previous menu or state
     }
 }
@@ -714,25 +804,25 @@ void updateMatrixBrightness()
 
     if (millis() - lastUpdateTime > updateDelay)
     {
-        if (abs(joystickY - 512) > JOYSTICK_THRESHOLD)
+        if (abs(joystickY - 512) > joystickThreshold)
         {
             matrixBrightness = constrain(matrixBrightness + (joystickY < 512 ? -1 : 1), 0, 15);
             applyMatrixBrightness();
             previewMatrixBrightness();
             lastUpdateTime = millis(); // Update the last update time
         }
-        else if (joystickX < JOYSTICK_THRESHOLD)
+        else if (joystickX < joystickThreshold)
         {
             brightnessSelection = 1; // Select "Save"
             lastUpdateTime = millis();
         }
-        else if (joystickX > 1023 - JOYSTICK_THRESHOLD)
+        else if (joystickX > 1023 - joystickThreshold)
         {
             brightnessSelection = 2; // Select "Cancel"
             lastUpdateTime = millis();
         }
 
-        displayMatrixBrightnessMenu();
+        displayMatrixBrightnessmenu();
     }
 }
 
@@ -742,17 +832,17 @@ void applyMatrixBrightness()
 }
 void saveMatrixBrightness()
 {
-    EEPROM.put(MATRIX_BRIGHTNESS_ADDRESS, matrixBrightness);
+    EEPROM.put(matrixBrightnessAddress, matrixBrightness);
     lc.clearDisplay(0);
-    goBackSettings();
+    goBacksettings();
 }
 
 void loadMatrixBrightness()
 {
-    EEPROM.get(MATRIX_BRIGHTNESS_ADDRESS, matrixBrightness);
+    EEPROM.get(matrixBrightnessAddress, matrixBrightness);
     lc.setIntensity(0, matrixBrightness);
     lc.clearDisplay(0);
-    goBackSettings();
+    goBacksettings();
 }
 void previewMatrixBrightness()
 {
@@ -768,64 +858,64 @@ void previewMatrixBrightness()
 ////////////////////////////////////////////////////////////////
 void matrixBrightnessControl()
 {
-    currentStateSettings = MATRIX_BRIGHTNESS;
-    EEPROM.get(MATRIX_BRIGHTNESS_ADDRESS, matrixBrightness);
+    currentStatesettings = matrixBrightnessState;
+    EEPROM.get(matrixBrightnessAddress, matrixBrightness);
 }
 ////////////////////////////////////////////////////////////////
 
 void soundControl()
 {
-    currentStateSettings = SOUND;
+    currentStatesettings = sound;
 };
 
 ////////////////////////////////////////////////////////////////
 void goBack()
 {
     currentSelection = -1;
-    currentState = MENU;
+    currentState = menu;
 };
-void startGame()
+void startgame()
 {
-    currentState = GAME;
+    currentState = game;
     gameStartTime = millis();
 }
 
 void showSettings()
 {
-    currentState = SETTINGS;
+    currentState = settings;
 }
 
 void showHighScore()
 {
-    currentState = HIGHSCORES;
+    currentState = highscoresState;
 }
 
 void aboutGame()
 {
-    currentState = ABOUT;
+    currentState = about;
 }
 
 void howToPlay()
 {
-    currentState = HOW_TO_PLAY;
+    currentState = howToPlayState;
 }
 ////////////////////////////////////////////////////////////////
-void saveHighScores(HighScoresEntry scores[], int count)
+void saveHighscores(HighscoresEntry scores[], int count)
 {
-    int address = EEPROM_START_ADDRESS;
+    int address = eepromStartAddress;
     for (int i = 0; i < count; i++)
     {
         EEPROM.put(address, scores[i]);
-        address += sizeof(HighScoresEntry);
+        address += sizeof(HighscoresEntry);
     }
 }
-void loadHighScores()
+void loadhighscores()
 {
-    int address = EEPROM_START_ADDRESS;
-    for (int i = 0; i < MAX_HIGH_SCORES; i++)
+    int address = eepromStartAddress;
+    for (int i = 0; i < maxHighScores; i++)
     {
-        EEPROM.get(address, highScores[i]);
-        address += sizeof(HighScoresEntry);
+        EEPROM.get(address, highscores[i]);
+        address += sizeof(HighscoresEntry);
     }
 }
 ////////////////////////////////////////////////////////////////
@@ -873,42 +963,42 @@ void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &curr
     }
 }
 
-void displayHighScores()
+void displayhighscores()
 {
     static int lastStartIndex = -1;
     // Only clear and update the display if there are changes
-    if (highScoreStartIndex != lastStartIndex)
+    if (highscorestartIndex != lastStartIndex)
     {
         lcd.clear();
         for (int i = 0; i < highScoreDisplayCount; i++)
         {
-            int scoreIndex = highScoreStartIndex + i;
-            if (scoreIndex < MAX_HIGH_SCORES)
+            int scoreIndex = highscorestartIndex + i;
+            if (scoreIndex < maxHighScores)
             {
                 lcd.setCursor(0, i);
                 lcd.print(scoreIndex + 1);
                 lcd.print(". ");
-                lcd.print(highScores[scoreIndex].playerName);
+                lcd.print(highscores[scoreIndex].playerName);
                 lcd.print(" - ");
-                lcd.print(highScores[scoreIndex].score);
+                lcd.print(highscores[scoreIndex].score);
             }
         }
 
         // Upward arrow
-        if (highScoreStartIndex > 0)
+        if (highscorestartIndex > 0)
         {
             lcd.setCursor(15, 0);
             lcd.write(byte(0));
         }
 
         // Downward arrow
-        if (highScoreStartIndex < MAX_HIGH_SCORES - highScoreDisplayCount)
+        if (highscorestartIndex < maxHighScores - highScoreDisplayCount)
         {
             lcd.setCursor(15, 1);
             lcd.write(byte(1));
         }
 
-        lastStartIndex = highScoreStartIndex;
+        lastStartIndex = highscorestartIndex;
     }
     if (joystickButtonPressed())
     {
@@ -923,19 +1013,19 @@ void displayStateLogo()
 
     switch (currentState)
     {
-    case MENU:
+    case menu:
         logo = menuLogo;
         break;
-    case SETTINGS:
+    case settings:
         logo = settingsLogo;
         break;
-    case HIGHSCORES:
-        logo = highScoresLogo;
+    case highscoresState:
+        logo = highscoresLogo;
         break;
-    case ABOUT:
+    case about:
         logo = aboutLogo;
         break;
-    case HOW_TO_PLAY:
+    case howToPlayState:
         logo = howToPlayLogo;
         break;
     default:
@@ -964,7 +1054,7 @@ void displayIntroMessage()
         {
             lcd.clear();
             isFirstTime = false;
-            playSound(GameStartSound);
+            playSound(introStartSound);
         }
         lcd.setCursor(0, 0); // Start at the first row
         lcd.write(byte(3));
@@ -999,8 +1089,8 @@ void displayIntroMessage()
 ////////////////////////////////////////////////////////////
 void displayMatrix()
 {
-    int roomX = player.x / 8; // Determine the room's X-coordinate (0 or 1)
-    int roomY = player.y / 8; // Determine the room's Y-coordinate (0 or 1)
+    int roomX = player.x / 8; // Determine the room's X-coordinPinate (0 or 1)
+    int roomY = player.y / 8; // Determine the room's Y-coordinPinate (0 or 1)
 
     int startX = roomX * 8;
     int startY = roomY * 8;
@@ -1028,7 +1118,7 @@ void displayMatrix()
     lc.setLed(0, player.y % 8, player.x % 8, player.isVisible);
 
     // Display treasures
-    for (int i = 0; i < MAX_TREASURES; i++)
+    for (int i = 0; i < maxTreasures; i++)
     {
         if (treasures[i].isVisible && isTreasureInCurrentRoom(i) && !treasures[i].isCollected)
         {
@@ -1039,7 +1129,7 @@ void displayMatrix()
 int countUncollectedTreasures()
 {
     int uncollectedCount = 0;
-    for (int i = 0; i < MAX_TREASURES; i++)
+    for (int i = 0; i < maxTreasures; i++)
     {
         if (!treasures[i].isCollected)
         {
@@ -1051,7 +1141,7 @@ int countUncollectedTreasures()
 void checkTreasureCollection()
 {
     unsigned long currentMillis = millis();
-    for (int i = 0; i < MAX_TREASURES; i++)
+    for (int i = 0; i < maxTreasures; i++)
     {
         if (player.x == treasures[i].x && player.y == treasures[i].y && treasures[i].isVisible && !treasures[i].isCollected)
         {
@@ -1059,7 +1149,8 @@ void checkTreasureCollection()
             int pointsForThisTreasure = max(50 - (timeTaken / 1000), 10); // Decrease points every second, min 10
             player.points += pointsForThisTreasure;
 
-            treasures[i].isCollected = true; // Mark the treasure as collected
+            treasures[i].isCollected = true;    // Mark the treasure as collected
+            playSound(treasureCollectionSound); // Play the treasure sound
             // Any other logic to handle after treasure collection
         }
     }
@@ -1073,7 +1164,7 @@ bool isTreasureInCurrentRoom(int treasureIndex)
 }
 bool isUncollectedTreasureAt(int x, int y)
 {
-    for (int i = 0; i < MAX_TREASURES; i++)
+    for (int i = 0; i < maxTreasures; i++)
     {
         if (treasures[i].x == x && treasures[i].y == y && !treasures[i].isCollected)
         {
@@ -1097,21 +1188,21 @@ void updatePlayerPosition()
         int previousY = player.y;
 
         // Check for X-axis movement
-        if (joystickX < 512 - JOYSTICK_THRESHOLD && player.x > 0)
+        if (joystickX < 512 - joystickThreshold && player.x > 0)
         {
             player.x--; // Move left
         }
-        else if (joystickX > 512 + JOYSTICK_THRESHOLD && player.x < WORLD_SIZE - 1)
+        else if (joystickX > 512 + joystickThreshold && player.x < worldSize - 1)
         {
             player.x++; // Move right
         }
 
         // Check for Y-axis movement
-        if (joystickY < 512 - JOYSTICK_THRESHOLD && player.y < WORLD_SIZE - 1)
+        if (joystickY < 512 - joystickThreshold && player.y < worldSize - 1)
         {
             player.y++; // Move down
         }
-        else if (joystickY > 512 + JOYSTICK_THRESHOLD && player.y > 0)
+        else if (joystickY > 512 + joystickThreshold && player.y > 0)
         {
             player.y--; // Move up
         }
@@ -1131,7 +1222,7 @@ void updatePlayerPosition()
     }
 
     // Reset to neutral if joystick is in the center position
-    if ((abs(joystickX - 512) < JOYSTICK_THRESHOLD) && (abs(joystickY - 512) < JOYSTICK_THRESHOLD))
+    if ((abs(joystickX - 512) < joystickThreshold) && (abs(joystickY - 512) < joystickThreshold))
     {
         isJoystickNeutral = true;
     }
@@ -1140,11 +1231,11 @@ void updatePlayerPosition()
 ////////////////////////////////////////////////////////////////
 void placeTreasures()
 {
-    for (int i = 0; i < MAX_TREASURES; i++)
+    for (int i = 0; i < maxTreasures; i++)
     {
         int newTreasureX, newTreasureY;
-        int roomX = (i % 2) * 8; // Room X-coordinate (either 0 or 8)
-        int roomY = (i / 2) * 8; // Room Y-coordinate (either 0 or 8)
+        int roomX = (i % 2) * 8; // Room X-coordinPinate (either 0 or 8)
+        int roomY = (i / 2) * 8; // Room Y-coordinPinate (either 0 or 8)
 
         do
         {
@@ -1162,13 +1253,13 @@ void placeTreasures()
 
 void updateTreasureDisplay(unsigned long currentMillis)
 {
-    const unsigned long TREASURE_BLINK_INTERVAL = 100; // Faster blink interval for treasure
+    const unsigned long TREASURE_blinkInterval = 100; // Faster blink interval for treasure
 
-    for (int i = 0; i < MAX_TREASURES; i++)
+    for (int i = 0; i < maxTreasures; i++)
     {
         if (!treasures[i].isCollected)
         { // Only update display for uncollected treasures
-            if (currentMillis - treasures[i].lastBlinkTime >= TREASURE_BLINK_INTERVAL)
+            if (currentMillis - treasures[i].lastBlinkTime >= TREASURE_blinkInterval)
             {
                 treasures[i].isVisible = !treasures[i].isVisible;
                 treasures[i].lastBlinkTime = currentMillis;
@@ -1180,14 +1271,25 @@ void updateTreasureDisplay(unsigned long currentMillis)
 void runGame()
 {
     unsigned long currentMillis = millis();
+    if (gameStarted)
+    {
+        playSound(gameStartSound); // Play the game start sound
+        gameStarted = false;       // Set the flag to false after playing the sound
+    }
     if (currentMillis - gameStartTime > timeLimit)
     {
-        endGame();
+        if (playOutroSound)
+        {
+            playSound(outroEndingSound);
+            playOutroSound = false;
+        }
+        gameStarted = false;
+        endgame();
         return;
     }
     else
     {
-        // Game logic...
+        // game logic...
         // Update the player's blinking logic
         unsigned long timeElapsed = currentMillis - gameStartTime;
         unsigned long timeRemaining = (timeLimit > timeElapsed) ? (timeLimit - timeElapsed) : 0;
@@ -1207,7 +1309,7 @@ void runGame()
             lcd.print(":");
             if (secondsRemaining < 10)
             {
-                lcd.print("0"); // Leading zero for single digit seconds
+                lcd.print("0"); // LeadinPing zero for single digit seconds
             }
             lcd.print(secondsRemaining);
 
@@ -1218,7 +1320,7 @@ void runGame()
 
             lastLCDUpdate = currentMillis;
         }
-        if (currentMillis - player.lastBlinkTime >= BLINK_INTERVAL)
+        if (currentMillis - player.lastBlinkTime >= blinkInterval)
         { // Blink interval (250 ms)
             player.isVisible = !player.isVisible;
             player.lastBlinkTime = currentMillis;
@@ -1239,7 +1341,7 @@ void runGame()
     }
 }
 
-void displayEndGameMessage()
+void displayEndgameMessage()
 {
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -1248,48 +1350,48 @@ void displayEndGameMessage()
     lcd.print("Points: ");
     lcd.print(player.points);
 }
-void displayEndGameMenu(EndGameOption &lastEndGameOption, EndGameOption endGameOption)
+void displayEndgameMenu(EndgameOption &lastEndgameOption, EndgameOption endgameOption)
 {
     // Update the display only if the option has changed
-    if (lastEndGameOption != endGameOption)
+    if (lastEndgameOption != endgameOption)
     {
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print(endGameOption == RETRY ? (char)2 : ' ');
+        lcd.print(endgameOption == retry ? (char)2 : ' ');
         lcd.print("Retry");
         lcd.setCursor(0, 1);
-        lcd.print(endGameOption == MAIN_MENU ? (char)2 : ' ');
-        lcd.print("Main Menu");
+        lcd.print(endgameOption == mainMenuState ? (char)2 : ' ');
+        lcd.print("Main menu");
 
-        lastEndGameOption = endGameOption;
+        lastEndgameOption = endgameOption;
     }
 }
 
-EndGameOption handleEndGameControls(EndGameOption endGameOption, bool &hasSelected, unsigned long displayEndTime)
+EndgameOption handleEndgameControls(EndgameOption endgameOption, bool &hasSelected, unsigned long displayEndTime)
 {
     if (millis() >= displayEndTime)
     {
         // Read joystick input for navigation
         int joystickY = analogRead(joystickYPin);
 
-        if (joystickY < JOYSTICK_THRESHOLD && endGameOption != MAIN_MENU)
+        if (joystickY < joystickThreshold && endgameOption != mainMenuState)
         {
-            playSound(MenuNavigationSound);
-            return MAIN_MENU;
+            playSound(menuNavigationSound);
+            return mainMenuState;
         }
-        else if (joystickY > 1023 - JOYSTICK_THRESHOLD && endGameOption != RETRY)
+        else if (joystickY > 1023 - joystickThreshold && endgameOption != retry)
         {
-            playSound(MenuNavigationSound);
-            return RETRY;
+            playSound(menuNavigationSound);
+            return retry;
         }
 
         if (joystickButtonPressed())
         {
             hasSelected = true;   // Reset for next time entering end game
-            return endGameOption; // Return the selected option
+            return endgameOption; // Return the selected option
         }
     }
-    return endGameOption;
+    return endgameOption;
 }
 
 bool enterPlayerName(bool reset = false)
@@ -1319,7 +1421,7 @@ bool enterPlayerName(bool reset = false)
         int joystickX = analogRead(joystickXPin);
 
         // Check if joystick is in the neutral position
-        bool joystickNeutral = abs(joystickX - joystickCenter) < JOYSTICK_THRESHOLD;
+        bool joystickNeutral = abs(joystickX - joystickCenter) < joystickThreshold;
 
         if (joystickNeutral)
         {
@@ -1327,11 +1429,11 @@ bool enterPlayerName(bool reset = false)
         }
         else if (isJoystickNeutral)
         {
-            if (joystickX < JOYSTICK_THRESHOLD)
+            if (joystickX < joystickThreshold)
             {
                 playerNameCharIndex = (playerNameCharIndex > 0) ? playerNameCharIndex - 1 : numCharacters - 1;
             }
-            else if (joystickX > 1023 - JOYSTICK_THRESHOLD)
+            else if (joystickX > 1023 - joystickThreshold)
             {
                 playerNameCharIndex = (playerNameCharIndex < numCharacters - 1) ? playerNameCharIndex + 1 : 0;
             }
@@ -1371,11 +1473,11 @@ bool enterPlayerName(bool reset = false)
 
 int checkHighScore(int playerScore)
 {
-    loadHighScores(); // Assuming this function loads the high scores from EEPROM
+    loadhighscores(); // Assuming this function loads the high scores from EEPROM
 
-    for (int i = 0; i < MAX_HIGH_SCORES; ++i)
+    for (int i = 0; i < maxHighScores; ++i)
     {
-        if (playerScore > highScores[i].score)
+        if (playerScore > highscores[i].score)
         {
             return i; // Player's score beats the score at position i
         }
@@ -1383,27 +1485,27 @@ int checkHighScore(int playerScore)
     return -1; // Player's score does not beat any high score
 }
 
-bool updateHighScores()
+bool updateHighscores()
 {
     int position = checkHighScore(player.points);
     if (position != -1)
     {
         // Shift lower scores down by one position
-        for (int i = MAX_HIGH_SCORES - 1; i > position; --i)
+        for (int i = maxHighScores - 1; i > position; --i)
         {
-            highScores[i] = highScores[i - 1];
+            highscores[i] = highscores[i - 1];
         }
 
         // Insert the new high score
         if (enterPlayerName())
         {
-            highScores[position].score = player.points;
+            highscores[position].score = player.points;
 
             // If playerName is a String, use c_str() to convert to char*
-            strncpy(highScores[position].playerName, playerName.c_str(), sizeof(highScores[position].playerName));
+            strncpy(highscores[position].playerName, playerName.c_str(), sizeof(highscores[position].playerName));
             // Ensure null termination
-            highScores[position].playerName[sizeof(highScores[position].playerName) - 1] = '\0';
-            saveHighScores(highScores, MAX_HIGH_SCORES); // Save the updated scores to EEPROM
+            highscores[position].playerName[sizeof(highscores[position].playerName) - 1] = '\0';
+            saveHighscores(highscores, maxHighScores); // Save the updated scores to EEPROM
             playerName = "";
             return true; // Reset player name for next game
         }
@@ -1411,29 +1513,29 @@ bool updateHighScores()
     return false;
 }
 
-void endGame()
+void endgame()
 {
-    static bool hasEnteredEndGame = false;
-    static bool hasEnteredEndGameMenu = false;
+    static bool hasEnteredEndgame = false;
+    static bool hasEnteredEndgamemenu = false;
     static bool isEnteringHighScore = false;
     static bool hasSelected = false;
 
-    static EndGameOption endGameOption = RETRY;
-    static EndGameOption lastEndGameOption = UNKNOWN;
+    static EndgameOption endgameOption = retry;
+    static EndgameOption lastEndgameOption = unknown;
     static unsigned long displayEndTime = 0;
     const unsigned long displayDuration = 2000; // 2 seconds
 
-    // Step 1: Display End Game Message
-    if (!hasEnteredEndGame)
+    // Step 1: Display End game Message
+    if (!hasEnteredEndgame)
     {
-        displayEndGameMessage();
+        displayEndgameMessage();
         displayEndTime = millis() + displayDuration; // Set the end time for the display
-        hasEnteredEndGame = true;
+        hasEnteredEndgame = true;
         return; // Exit the function to allow the message to display for the full duration
     }
 
     // Step 2: Enter Player Name for High Score
-    if (millis() > displayEndTime && !isEnteringHighScore && !hasEnteredEndGameMenu)
+    if (millis() > displayEndTime && !isEnteringHighScore && !hasEnteredEndgamemenu)
     {
         if (checkHighScore(player.points) != -1)
         {
@@ -1443,40 +1545,40 @@ void endGame()
         {
             // No high score, skip to end game menu
             isEnteringHighScore = false;
-            hasEnteredEndGameMenu = true;
+            hasEnteredEndgamemenu = true;
             return;
         }
     }
 
     if (isEnteringHighScore)
     {
-        if (updateHighScores())
+        if (updateHighscores())
         {
             isEnteringHighScore = false;
-            hasEnteredEndGameMenu = true;
+            hasEnteredEndgamemenu = true;
         }
         return;
     }
 
-    // Step 3: Display End Game Menu
-    if (hasEnteredEndGameMenu)
+    // Step 3: Display End game menu
+    if (hasEnteredEndgamemenu)
     {
         if (!hasSelected)
         {
-            endGameOption = handleEndGameControls(endGameOption, hasSelected, displayEndTime);
-            if (endGameOption != lastEndGameOption)
+            endgameOption = handleEndgameControls(endgameOption, hasSelected, displayEndTime);
+            if (endgameOption != lastEndgameOption)
             {
-                displayEndGameMenu(lastEndGameOption, endGameOption);
+                displayEndgameMenu(lastEndgameOption, endgameOption);
             }
         }
         else
         {
 
             // Execute the selected option
-            if (endGameOption == RETRY)
+            if (endgameOption == retry)
             {
                 enterPlayerName(true);
-                restartGame();
+                restartgame();
             }
             else
             {
@@ -1484,13 +1586,14 @@ void endGame()
                 clearMatrix();
             }
 
-            hasEnteredEndGame = false;
-            hasEnteredEndGameMenu = false;
+            hasEnteredEndgame = false;
+            playOutroSound = true;
+            hasEnteredEndgamemenu = false;
             isEnteringHighScore = false;
             hasSelected = false;
 
-            endGameOption = RETRY;
-            lastEndGameOption = UNKNOWN;
+            endgameOption = retry;
+            lastEndgameOption = unknown;
             displayEndTime = 0;
         }
     }
@@ -1505,7 +1608,7 @@ void restartPlayer()
     player.isVisible = true;
     player.lastBlinkTime = millis();
 }
-void restartGame()
+void restartgame()
 {
     restartPlayer();
     // Reset the treasure
@@ -1533,7 +1636,7 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
         bool selectionChanged = false;
         int direction = 1; // Reverses the logic if needed
 
-        if (joystickY > 1023 - JOYSTICK_THRESHOLD)
+        if (joystickY > 1023 - joystickThreshold)
         {
             currentSelection -= direction;
             if (currentSelection < 0)
@@ -1547,7 +1650,7 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
             selectionChanged = true;
             lastMoveTime = millis();
         }
-        else if (joystickY < JOYSTICK_THRESHOLD)
+        else if (joystickY < joystickThreshold)
         {
             currentSelection += direction;
             if (currentSelection < 0)
@@ -1563,7 +1666,7 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
         }
         if (selectionChanged)
         {
-            playSound(MenuNavigationSound); // Play sound on the buzzer
+            playSound(menuNavigationSound); // Play sound on the buzzer
         }
     }
 }
@@ -1604,11 +1707,11 @@ void scrollText(const String &text)
     }
 }
 ////////////////////////////////////////////////////////////////
-void settingsMenuDisplay()
+void settingsmenuDisplay()
 {
-    switch (currentStateSettings)
+    switch (currentStatesettings)
     {
-    case SETTINGS_MENU:
+    case settingsMenuState:
         updateMenuNavigation(settingsCurrentSelection, settingsMenuItemCount);
         displayGenericMenu(settingsMenu, settingsMenuItemCount, settingsCurrentSelection, 2);
         if (joystickButtonPressed())
@@ -1616,21 +1719,22 @@ void settingsMenuDisplay()
             settingsMenu[settingsCurrentSelection].function();
         }
         break;
-    case LCD_BRIGHTNESS:
+    case lcdBrightnessState:
         displayLCDBrightness();
         break;
-    case MATRIX_BRIGHTNESS:
+    case matrixBrightnessState:
         // Logic for adjusting matrix brightness
         displayMatrixBrightness();
         break;
-    case SOUND:
-        displaySoundSettingsMenu();
+    case sound:
+        displaysoundsettingsmenu();
         break;
     }
 }
 /////////////////////////////////////////////////////////////////////////
 void playSound(SoundType sound)
 {
+    lastSound = sound; // Save the last sound played
     if (!soundEnabled)
     {
         return; // Do nothing if sound is disabled
@@ -1638,44 +1742,125 @@ void playSound(SoundType sound)
 
     switch (sound)
     {
-    case MenuNavigationSound:
-        tone(BUZZER_PIN, BUZZER_FREQUENCY, BUZZER_DURATION); // Example: 1000 Hz for 50 ms
+    case menuNavigationSound:
+        tone(buzzerPin, buzzerMoveFrequency, buzzerMoveDuration); // Example: 1000 Hz for 50 ms
         break;
-    case ButtonPressSound:
-        tone(BUZZER_PIN, BUTTON_PRESS_FREQUENCY, BUTTON_PRESS_DURATION); // Example: 1500 Hz for 100 ms
+    case buttonPressSound:
+        tone(buzzerPin, buttonPressFrequency, buttonPressDuration); // Example: 1500 Hz for 100 ms
         break;
-    case GameStartSound:
-        for (int i = 0; i < GAME_START_NOTES; ++i)
-        {
-            tone(BUZZER_PIN, GAME_START_FREQUENCIES[i], GAME_START_DURATIONS[i]);
-            delay(GAME_START_DURATIONS[i]); // Wait for the tone to finish
-        }
+    case introStartSound:
+        soundState = soundOn;
+        noteIndex = 0;
+        soundStartTime = millis();
+        tone(buzzerPin, introSoundFrequencies[noteIndex], introSoundDurations[noteIndex]);
+        break;
+    case gameStartSound:
+        soundState = soundOn;
+        noteIndex = 0;
+        soundStartTime = millis();
+        tone(buzzerPin, gameStartFrequencies[noteIndex], gameStartDurations[noteIndex]);
+        break;
+    case outroEndingSound:
+        soundState = soundOn;
+        noteIndex = 0;
+        soundStartTime = millis();
+        tone(buzzerPin, outroSoundFrequencies[noteIndex], outroSoundDurations[noteIndex]);
+        break;
+    case treasureCollectionSound:
+        soundState = soundOn;
+        noteIndex = 0;
+        soundStartTime = millis();
+        tone(buzzerPin, treasureCollectionFrequencies[noteIndex], treasureCollectionDurations[noteIndex]);
+        lastSound = treasureCollectionSound;
         break;
     // Add more cases for different sounds
     default:
         break; // Optionally handle unknown sound types
     }
 }
-void toggleSoundSettings()
+
+void updateSound()
+{
+    if (soundState == soundOn)
+    {
+        unsigned long currentMillis = millis();
+
+        int currentNoteDuration;
+        int currentFrequency;
+
+        switch (lastSound)
+        {
+        case introStartSound:
+            if (noteIndex < introSoundNotes)
+            {
+                currentNoteDuration = introSoundDurations[noteIndex];
+                currentFrequency = introSoundFrequencies[noteIndex];
+            }
+            break;
+        case gameStartSound:
+            if (noteIndex < gameStartNotes)
+            {
+                currentNoteDuration = gameStartDurations[noteIndex];
+                currentFrequency = gameStartFrequencies[noteIndex];
+            }
+            break;
+        case outroEndingSound:
+            if (noteIndex < outroSoundNotes)
+            {
+                currentNoteDuration = outroSoundDurations[noteIndex];
+                currentFrequency = outroSoundFrequencies[noteIndex];
+            }
+            break;
+        case treasureCollectionSound:
+
+            if (noteIndex < treasureCollectionNotes)
+            {
+                currentNoteDuration = treasureCollectionDurations[noteIndex];
+                currentFrequency = treasureCollectionFrequencies[noteIndex];
+            }
+            break;
+        default:
+            return; // No sound or unknown sound type
+        }
+
+        if (currentMillis - soundStartTime >= currentNoteDuration)
+        {
+            noteIndex++;
+            soundStartTime = currentMillis; // Update the start time
+
+            if (noteIndex < introSoundNotes)
+            { // Replace with correct note count for the current sound
+                tone(buzzerPin, currentFrequency, currentNoteDuration);
+            }
+            else
+            {
+                soundState = soundOff;    // All notes played, turn off the sound
+                lastSound = unknownSound; // Reset last sound
+            }
+        }
+    }
+}
+
+void togglesoundsettings()
 {
     soundEnabled = !soundEnabled; // Toggle the sound setting
-    saveSoundSettings();          // Save the new setting to EEPROM
+    savesoundsettings();          // Save the new setting to EEPROM
 }
-void saveSoundSettings()
+void savesoundsettings()
 {
-    EEPROM.put(SOUND_SETTING_ADDRESS, soundEnabled);
-    goBackSettings();
+    EEPROM.put(soundSettingAddress, soundEnabled);
+    goBacksettings();
 }
-void loadSoundSettings()
+void loadsoundsettings()
 {
-    EEPROM.get(SOUND_SETTING_ADDRESS, soundEnabled);
+    EEPROM.get(soundSettingAddress, soundEnabled);
 }
-void displaySoundSettingsMenu()
+void displaysoundsettingsmenu()
 {
-    static MenuOptions soundMenuSelection = MENU_YES; // Default to 'YES'
-    static bool hasEntered = false;                   // Track if it's the first time entering the menu
-    static unsigned long lastMoveTime = millis();     // For debouncing
-    const unsigned long moveDelay = 200;              // Delay in milliseconds for debouncing
+    static MenuOptions soundMenuSelection = menuYes; // Default to 'YES'
+    static bool hasEntered = false;                  // Track if it's the first time entering the menu
+    static unsigned long lastMoveTime = millis();    // For debouncing
+    const unsigned long moveDelay = 200;             // Delay in milliseconds for debouncing
 
     // Clear the LCD only on the first entry
     if (!hasEntered)
@@ -1692,14 +1877,14 @@ void displaySoundSettingsMenu()
     if (millis() - lastMoveTime > moveDelay)
     {
         // Adjust selection based on left/right movement
-        if (joystickX < JOYSTICK_THRESHOLD)
+        if (joystickX < joystickThreshold)
         {
-            soundMenuSelection = static_cast<MenuOptions>(max(static_cast<int>(soundMenuSelection) - 1, static_cast<int>(MENU_YES)));
+            soundMenuSelection = static_cast<MenuOptions>(max(static_cast<int>(soundMenuSelection) - 1, static_cast<int>(menuYes)));
             lastMoveTime = millis();
         }
-        else if (joystickX > 1023 - JOYSTICK_THRESHOLD)
+        else if (joystickX > 1023 - joystickThreshold)
         {
-            soundMenuSelection = static_cast<MenuOptions>(min(static_cast<int>(soundMenuSelection) + 1, static_cast<int>(MENU_CANCEL)));
+            soundMenuSelection = static_cast<MenuOptions>(min(static_cast<int>(soundMenuSelection) + 1, static_cast<int>(menuCancel)));
             lastMoveTime = millis();
         }
     }
@@ -1708,33 +1893,33 @@ void displaySoundSettingsMenu()
     if (millis() - lastMoveTime <= moveDelay)
     {
         lcd.setCursor(0, 0);
-        lcd.print("Sound: ");
+        lcd.print("sound: ");
         lcd.setCursor(0, 1);
-        lcd.print(soundMenuSelection == MENU_YES ? (char)2 : ' '); // Special character for 'YES'
+        lcd.print(soundMenuSelection == menuYes ? (char)2 : ' '); // Special character for 'YES'
         lcd.print("YES ");
-        lcd.print(soundMenuSelection == MENU_NO ? (char)2 : ' '); // Special character for 'NO'
+        lcd.print(soundMenuSelection == menuNo ? (char)2 : ' '); // Special character for 'NO'
         lcd.print("NO ");
-        lcd.print(soundMenuSelection == MENU_CANCEL ? (char)2 : ' '); // Special character for 'CANCEL'
+        lcd.print(soundMenuSelection == menuCancel ? (char)2 : ' '); // Special character for 'CANCEL'
         lcd.print("CANCEL");
     }
 
     // Handle button press
     if (joystickButtonPressed())
     {
-        if (soundMenuSelection == MENU_YES)
+        if (soundMenuSelection == menuYes)
         {
             soundEnabled = true;
-            saveSoundSettings();
+            savesoundsettings();
         }
-        else if (soundMenuSelection == MENU_NO)
+        else if (soundMenuSelection == menuNo)
         {
             soundEnabled = false;
             // Reset the last move time to prevent accidental double-press
-            saveSoundSettings();
+            savesoundsettings();
         }
         // Reset the last move time to prevent accidental double-press
         // For both YES/NO and CANCEL, return to the previous menu
-        goBackSettings();   // Assuming this function is defined to handle going back
+        goBacksettings();   // Assuming this function is defined to handle going back
         hasEntered = false; // Reset the flag when leaving the menu
     }
 }
