@@ -49,9 +49,10 @@ struct Treasure
     int x;
     int y;
     bool isVisible;
+    bool isCollected;
     unsigned long lastBlinkTime;
     unsigned long spawnTime; // Time when the treasure is placed
-} treasure;
+};
 
 enum ProgramState
 {
@@ -74,6 +75,7 @@ enum SoundType
 {
     MenuNavigationSound,
     ButtonPressSound,
+    GameStartSound,
     // Add more sound types as needed
 };
 
@@ -102,12 +104,15 @@ enum EndGameOption
 #define JOYSTICK_THRESHOLD 512 / 2
 #define DEBOUNCE_DELAY 200
 #define BLINK_INTERVAL 250
+#define WORLD_SIZE 16
+#define MAX_TREASURES 4
 
 // ------------------------------
 // Text Constants
 const String aboutText = "Game: Space Adventure - By: DevTeam - GitHub: @DevTeam";
 const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
 const char characters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const String introMessage = "Welcome to Treasure Quest! Let the adventure begin!";
 const int numCharacters = sizeof(characters) - 1; // -1 for the null terminator
 
 // Custom characters
@@ -141,17 +146,121 @@ byte rightArrow[8] = {
     0b00000,
     0b00000};
 
-int virtualMatrix[8][8] = {
-    {0, 1, 0, 0, 0, 1, 1, 0},
-    {0, 1, 0, 1, 0, 0, 0, 0},
-    {0, 0, 0, 1, 0, 1, 0, 1},
-    {1, 1, 0, 0, 0, 1, 0, 1},
-    {0, 0, 0, 0, 0, 0, 1, 0},
-    {0, 1, 1, 1, 1, 0, 1, 1},
-    {0, 0, 0, 1, 0, 0, 0, 0},
-    {1, 1, 0, 1, 1, 1, 1, 0}};
+byte treasureChestLogo[8] = {
+    0b00111100,
+    0b01111110,
+    0b11111111,
+    0b11111111,
+    0b10111101,
+    0b10111101,
+    0b11111111,
+    0b01111110};
+byte treasureChestChar[8] = {
+    0b00000,
+    0b01110,
+    0b11111,
+    0b11111,
+    0b11111,
+    0b10101,
+    0b11111,
+    0b01110};
+byte starChar[8] = {
+    0b00100,
+    0b01110,
+    0b11111,
+    0b01110,
+    0b00100,
+    0b00000,
+    0b00000,
+    0b00000};
+
+byte menuLogo[8] = {
+    0b00001000,
+    0b00110000,
+    0b00111100,
+    0b01111110,
+    0b01000010,
+    0b01011010,
+    0b01011010,
+    0b01111110};
+
+byte gameLogo[8] = {
+    0b00001000, //    *
+    0b00011000, //   **
+    0b00111000, //  ***
+    0b00111110, // *****
+    0b00111000, //  ***
+    0b00011000, //   **
+    0b00001000, //    *
+    0b00000000  // (empty row)
+};
+
+byte settingsLogo[8] = {
+    0b00000000, // (empty row)
+    0b00100100, //   *   *
+    0b01011010, //  * ** *
+    0b11111111, // ********
+    0b01111110, //  ******
+    0b01011010, //  * ** *
+    0b00100100, //   *   *
+    0b00000000  // (empty row)
+};
+
+byte highScoresLogo[8] = {
+    0b00011000, //    **
+    0b00011000, //    **
+    0b00111100, //   ****
+    0b01111110, //  ******
+    0b11111111, // ********
+    0b00111100, //   ****
+    0b00111100, //   ****
+    0b01011010  //  * ** *
+};
+
+byte aboutLogo[8] = {
+    0b00000000, // (empty row)
+    0b00011000, //    **
+    0b00100100, //   *  *
+    0b01000010, //  *    *
+    0b01111110, //  ******
+    0b01000010, //  *    *
+    0b01000010, //  *    *
+    0b01000010  //  *    *
+};
+
+byte howToPlayLogo[8] = {
+    0b00011000, //    **
+    0b00100100, //   *  *
+    0b01000010, //  *    *
+    0b00000010, //       *
+    0b00000100, //      *
+    0b00011000, //    **
+    0b00000000, //  (empty)
+    0b00011000  //    **
+};
+
+int virtualMatrix[WORLD_SIZE][WORLD_SIZE] = {
+    {0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0},
+    {0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
+    {0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0},
+    {0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0},
+    {0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1},
+    {0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0},
+    {1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0},
+
+    {1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0},
+    {0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
+    {0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1},
+    {1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0},
+    {0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1},
+    {0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0},
+    {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0}};
 
 // Global Variables
+unsigned long introStartTime = 0;
+bool introDisplayed = false;
 int joystickCenter = 512;
 int currentSelection = -1;
 int settingsCurrentSelection = -1;
@@ -167,14 +276,20 @@ const int BUZZER_FREQUENCY = 1000; // Frequency of the buzzer sound in Hertz
 const int BUZZER_DURATION = 50;
 const int BUTTON_PRESS_FREQUENCY = 1500; // Frequency for button press sound
 const int BUTTON_PRESS_DURATION = 100;
+// Constants for the game start sound
+const int GAME_START_FREQUENCIES[] = {440, 554, 659, 880};                 // Example frequencies in Hz (A4, C#5, E5, A5)
+const int GAME_START_DURATIONS[] = {100, 100, 100, 300};                   // Durations in milliseconds
+const int GAME_START_NOTES = sizeof(GAME_START_FREQUENCIES) / sizeof(int); // Number of notes
+
 const int highScoreDisplayCount = 2; // Number of high scores to display at a time
 bool soundEnabled = true;            // Default value, can be true or false
 HighScoresEntry highScores[MAX_HIGH_SCORES];
 unsigned long gameStartTime;
-unsigned long timeLimit = 5000;
+unsigned long timeLimit = 120000;
 String playerName = "";
 int playerNameCharIndex = 0;
 int playerNameLength = 0;
+Treasure treasures[MAX_TREASURES];
 
 // ------------------------------
 // Function Declarations
@@ -197,11 +312,12 @@ bool joystickButtonPressed();
 void saveHighScores(HighScoresEntry scores[], int count);
 void loadHighScores();
 void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &currentSelection, int displayCount);
-void updateHighScores();
+bool updateHighScores();
 void displayHighScores();
 void displayMatrix();
+void displayIntroMessage();
 void updatePlayerPosition();
-void placeTreasure();
+void placeTreasures();
 void updateTreasureDisplay(unsigned long currentMillis);
 void applyLCDBrightness();
 void saveLCDBrightness();
@@ -215,6 +331,7 @@ void settingsMenuDisplay();
 void displayMatrixBrightnessMenu();
 void updateMatrixBrightness();
 void applyMatrixBrightness();
+void restartPlayer();
 void previewMatrixBrightness();
 void saveMatrixBrightness();
 void loadMatrixBrightness();
@@ -225,10 +342,15 @@ void toggleSoundSettings();
 void saveSoundSettings();
 void loadSoundSettings();
 void displayEndGameMessage();
+bool isTreasureInCurrentRoom(int treasureIndex);
+void checkTreasureCollection();
 void displayEndGameMenu(EndGameOption &lastEndGameOption, EndGameOption endGameOption);
 void clearMatrix();
-EndGameOption handleEndGameControls(EndGameOption &endGameOption, bool &hasEnteredEndGame, unsigned long displayEndTime);
+int countUncollectedTreasures();
+EndGameOption handleEndGameControls(EndGameOption endGameOption, bool &hasEnteredEndGame, unsigned long displayEndTime);
 bool enterPlayerName(bool reset = false);
+bool isUncollectedTreasureAt(int x, int y);
+void displayStateLogo();
 // ------------------------------
 MenuItem settingsMenu[] = {
     {"LCD Brightness", lcdBrightnessControl},
@@ -260,10 +382,12 @@ void setup()
     lc.clearDisplay(0);    // Clear display register
 
     // Initialize the LCD
-    lcd.begin(16, 2);              // Assuming a 16x2 LCD
-    lcd.createChar(0, upArrow);    // Create custom up arrow character
-    lcd.createChar(1, downArrow);  // Create custom down arrow character
-    lcd.createChar(2, rightArrow); // Create custom right arrow character
+    lcd.begin(16, 2);                     // Assuming a 16x2 LCD
+    lcd.createChar(0, upArrow);           // Create custom up arrow character
+    lcd.createChar(1, downArrow);         // Create custom down arrow character
+    lcd.createChar(2, rightArrow);        // Create custom right arrow character
+    lcd.createChar(3, treasureChestChar); // Register the treasure chest character as character 0
+    lcd.createChar(4, starChar);
     // Initialize player settings
     player.x = 3;
     player.y = 3;
@@ -276,15 +400,16 @@ void setup()
     pinMode(joystickYPin, INPUT);      // Joystick Y-axis
     pinMode(buttonPin, INPUT_PULLUP);  // Joystick button
     pinMode(brightnessLcdPin, OUTPUT); // LCD brightness control
-
     // Load settings
     loadMatrixBrightness(); // Load matrix brightness from EEPROM
     loadLCDBrightness();    // Load LCD brightness from EEPROM
     loadSoundSettings();
     loadHighScores();
+
+    analogWrite(brightnessLcdPin, lcdBrightness);
     // Game-specific setup
-    placeTreasure(); // Place the treasure in the game
-    Serial.begin(9600);
+    placeTreasures(); // Place the treasure in the game
+    // Serial.begin(9600);
     // formatEEPROM();
 }
 
@@ -301,37 +426,41 @@ void formatEEPROM()
 }
 void loop()
 {
-    switch (currentState)
+    if (introDisplayed)
     {
-    case MENU:
-        updateMenuNavigation(currentSelection, menuItemCount);
-        displayGenericMenu(mainMenu, menuItemCount, currentSelection, 2);
-        if (joystickButtonPressed())
+        switch (currentState)
         {
-            mainMenu[currentSelection].function();
+        case MENU:
+            updateMenuNavigation(currentSelection, menuItemCount);
+            displayGenericMenu(mainMenu, menuItemCount, currentSelection, 2);
+
+            if (joystickButtonPressed())
+            {
+                mainMenu[currentSelection].function();
+            }
+            break;
+        case GAME:
+            runGame(); // Placeholder function for running the game
+            break;
+        case HIGHSCORES:
+            updateMenuNavigation(highScoreStartIndex, MAX_HIGH_SCORES);
+            displayHighScores();
+
+            break;
+        case SETTINGS:
+            settingsMenuDisplay();
+            break;
+        case ABOUT:
+            scrollText(aboutText);
+            break;
+        case HOW_TO_PLAY:
+            scrollText(howToPlayText);
+            break;
         }
-        break;
-    case GAME:
-        runGame(); // Placeholder function for running the game
-        break;
-    case HIGHSCORES:
-        updateMenuNavigation(highScoreStartIndex, MAX_HIGH_SCORES);
-        displayHighScores();
-        if (joystickButtonPressed())
-        {
-            currentState = MENU;
-        }
-        break;
-    case SETTINGS:
-        settingsMenuDisplay();
-        break;
-    case ABOUT:
-        scrollText(aboutText);
-        break;
-    case HOW_TO_PLAY:
-        scrollText(howToPlayText);
-        break;
+        displayStateLogo();
     }
+    else
+        displayIntroMessage();
     delay(1);
 }
 
@@ -374,7 +503,7 @@ void displayLCDBrightnessMenu()
     if (lastLcdBrightness != lcdBrightness)
     {
         lcd.setCursor(0, 0);
-        lcd.print("Brightness:     "); // Clear the previous value
+        lcd.print(F("Brightness:     ")); // Clear the previous value
         lcd.setCursor(12, 0);
         lcd.print(lcdBrightness);
         lastLcdBrightness = lcdBrightness;
@@ -747,7 +876,6 @@ void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &curr
 void displayHighScores()
 {
     static int lastStartIndex = -1;
-
     // Only clear and update the display if there are changes
     if (highScoreStartIndex != lastStartIndex)
     {
@@ -782,111 +910,273 @@ void displayHighScores()
 
         lastStartIndex = highScoreStartIndex;
     }
+    if (joystickButtonPressed())
+    {
+        goBack();
+        lastStartIndex = -1;
+    }
 }
 ////////////////////////////////////////////////////////////
-void displayMatrix()
+void displayStateLogo()
 {
+    byte *logo;
+
+    switch (currentState)
+    {
+    case MENU:
+        logo = menuLogo;
+        break;
+    case SETTINGS:
+        logo = settingsLogo;
+        break;
+    case HIGHSCORES:
+        logo = highScoresLogo;
+        break;
+    case ABOUT:
+        logo = aboutLogo;
+        break;
+    case HOW_TO_PLAY:
+        logo = howToPlayLogo;
+        break;
+    default:
+        return; // Do nothing if the state is not recognized
+    }
+
     for (int row = 0; row < 8; row++)
     {
         for (int col = 0; col < 8; col++)
         {
-            // Display the maze walls
-            if (virtualMatrix[row][col] == 1)
+            bool isOn = logo[row] & (1 << col);
+            lc.setLed(0, row, col, isOn);
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////
+void displayIntroMessage()
+{
+    static bool isFirstTime = true;
+
+    if (!introDisplayed)
+    {
+        // Display intro message on the LCD
+        if (isFirstTime)
+        {
+            lcd.clear();
+            isFirstTime = false;
+            playSound(GameStartSound);
+        }
+        lcd.setCursor(0, 0); // Start at the first row
+        lcd.write(byte(3));
+        lcd.print("  WELCOME TO  ");
+        lcd.write(byte(3)); // Star character
+
+        // Second Row: "*treasure chest* TREASURE HUNT *treasure chest*"
+        lcd.setCursor(0, 1); // Move to the second row
+        lcd.write(byte(4));  // Treasure chest character
+        lcd.print(" TREASUREHUNT ");
+        lcd.write(byte(4)); // Treasure chest character
+
+        // Display the logo on the LED matrix
+        for (int row = 0; row < 8; row++)
+        {
+            byte displayRow = treasureChestLogo[row];
+            for (int col = 0; col < 8; col++)
+            {
+                bool isOn = displayRow & (1 << col);
+                lc.setLed(0, row, col, isOn);
+            }
+        }
+    }
+
+    if (millis() - introStartTime > 3000)
+    { // 3 seconds delay
+        lcd.clear();
+        lc.clearDisplay(0);
+        introDisplayed = true;
+    }
+}
+////////////////////////////////////////////////////////////
+void displayMatrix()
+{
+    int roomX = player.x / 8; // Determine the room's X-coordinate (0 or 1)
+    int roomY = player.y / 8; // Determine the room's Y-coordinate (0 or 1)
+
+    int startX = roomX * 8;
+    int startY = roomY * 8;
+
+    for (int row = 0; row < 8; row++)
+    {
+        for (int col = 0; col < 8; col++)
+        {
+            int worldRow = startY + row;
+            int worldCol = startX + col;
+
+            // Display the walls, open space, player, and treasure based on the virtual world
+            if (virtualMatrix[worldRow][worldCol] == 1)
             {
                 lc.setLed(0, row, col, true); // Wall
             }
             else
             {
-                lc.setLed(0, row, col, virtualMatrix[row][col]); // Open space or player/treasure
+                lc.setLed(0, row, col, virtualMatrix[worldRow][worldCol]); // Open space or other elements
             }
         }
     }
-    // Display player and treasure
-    lc.setLed(0, player.x, player.y, player.isVisible);
-    lc.setLed(0, treasure.x, treasure.y, treasure.isVisible);
+
+    // Adjust player and treasure positions relative to the current room
+    lc.setLed(0, player.y % 8, player.x % 8, player.isVisible);
+
+    // Display treasures
+    for (int i = 0; i < MAX_TREASURES; i++)
+    {
+        if (treasures[i].isVisible && isTreasureInCurrentRoom(i) && !treasures[i].isCollected)
+        {
+            lc.setLed(0, treasures[i].y % 8, treasures[i].x % 8, true);
+        }
+    }
+}
+int countUncollectedTreasures()
+{
+    int uncollectedCount = 0;
+    for (int i = 0; i < MAX_TREASURES; i++)
+    {
+        if (!treasures[i].isCollected)
+        {
+            uncollectedCount++;
+        }
+    }
+    return uncollectedCount;
+}
+void checkTreasureCollection()
+{
+    unsigned long currentMillis = millis();
+    for (int i = 0; i < MAX_TREASURES; i++)
+    {
+        if (player.x == treasures[i].x && player.y == treasures[i].y && treasures[i].isVisible && !treasures[i].isCollected)
+        {
+            unsigned long timeTaken = currentMillis - treasures[i].spawnTime;
+            int pointsForThisTreasure = max(50 - (timeTaken / 1000), 10); // Decrease points every second, min 10
+            player.points += pointsForThisTreasure;
+
+            treasures[i].isCollected = true; // Mark the treasure as collected
+            // Any other logic to handle after treasure collection
+        }
+    }
+}
+
+bool isTreasureInCurrentRoom(int treasureIndex)
+{
+    int roomX = player.x / 8;
+    int roomY = player.y / 8;
+    return (treasures[treasureIndex].x / 8 == roomX && treasures[treasureIndex].y / 8 == roomY);
+}
+bool isUncollectedTreasureAt(int x, int y)
+{
+    for (int i = 0; i < MAX_TREASURES; i++)
+    {
+        if (treasures[i].x == x && treasures[i].y == y && !treasures[i].isCollected)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void updatePlayerPosition()
 {
-    static bool isJoystickNeutral = true;
+    static bool isJoystickNeutral = true; // Tracks if the joystick is in the neutral position
 
-    // reversed until further movements of the joystick
-    int joystickY = analogRead(joystickXPin);
-    int joystickX = analogRead(joystickYPin);
+    int joystickY = analogRead(joystickYPin); // Read Y-axis
+    int joystickX = analogRead(joystickXPin); // Read X-axis
 
-    // Check if joystick is in the neutral position
-    bool joystickNeutral = (abs(joystickX - 512) < JOYSTICK_THRESHOLD) &&
-                           (abs(joystickY - 512) < JOYSTICK_THRESHOLD);
-
+    // Only allow movement if the joystick was in the neutral position
     if (isJoystickNeutral)
     {
-        // Store the current position in case we need to revert the move
         int previousX = player.x;
         int previousY = player.y;
 
-        // Attempt to move the player based on joystick input
-        if (joystickX < 512 - JOYSTICK_THRESHOLD)
+        // Check for X-axis movement
+        if (joystickX < 512 - JOYSTICK_THRESHOLD && player.x > 0)
         {
-            player.x = max(player.x + 1, 0); // Move left
-            isJoystickNeutral = false;
+            player.x--; // Move left
         }
-        else if (joystickX > 512 + JOYSTICK_THRESHOLD)
+        else if (joystickX > 512 + JOYSTICK_THRESHOLD && player.x < WORLD_SIZE - 1)
         {
-            player.x = min(player.x - 1, 7); // Move right
-            isJoystickNeutral = false;
+            player.x++; // Move right
         }
 
-        if (joystickY < 512 - JOYSTICK_THRESHOLD)
+        // Check for Y-axis movement
+        if (joystickY < 512 - JOYSTICK_THRESHOLD && player.y < WORLD_SIZE - 1)
         {
-            player.y = min(player.y - 1, 7); // Move down
-            isJoystickNeutral = false;
+            player.y++; // Move down
         }
-        else if (joystickY > 512 + JOYSTICK_THRESHOLD)
+        else if (joystickY > 512 + JOYSTICK_THRESHOLD && player.y > 0)
         {
-            player.y = max(player.y + 1, 0); // Move up
-            isJoystickNeutral = false;
+            player.y--; // Move up
         }
 
-        // Check for wall collision (maze wall and not treasure position)
-        if ((virtualMatrix[player.x][player.y] == 1) && (player.x != treasure.x || player.y != treasure.y))
+        // Check for collision or treasure
+        if (virtualMatrix[player.y][player.x] == 1 && !isUncollectedTreasureAt(player.x, player.y))
         {
-            // If there's a wall and it's not the treasure, revert the move
-            player.x = previousX;
+            player.x = previousX; // Revert if hitting a wall and no treasure
             player.y = previousY;
         }
+
+        // Set the joystick to non-neutral after movement
+        if (player.x != previousX || player.y != previousY)
+        {
+            isJoystickNeutral = false;
+        }
     }
-    else if (joystickNeutral)
+
+    // Reset to neutral if joystick is in the center position
+    if ((abs(joystickX - 512) < JOYSTICK_THRESHOLD) && (abs(joystickY - 512) < JOYSTICK_THRESHOLD))
     {
-        // Reset to allow another move only when joystick returns to neutral
         isJoystickNeutral = true;
     }
 }
+
 ////////////////////////////////////////////////////////////////
-void placeTreasure()
+void placeTreasures()
 {
-    int newTreasureX = random(0, 8); // Random X position
-    int newTreasureY = random(0, 8); // Random Y position
-    while (virtualMatrix[newTreasureX][newTreasureY] == 1)
+    for (int i = 0; i < MAX_TREASURES; i++)
     {
-        // If the new position is a wall, try again
-        newTreasureX = random(0, 8);
-        newTreasureY = random(0, 8);
+        int newTreasureX, newTreasureY;
+        int roomX = (i % 2) * 8; // Room X-coordinate (either 0 or 8)
+        int roomY = (i / 2) * 8; // Room Y-coordinate (either 0 or 8)
+
+        do
+        {
+            newTreasureX = roomX + random(0, 8);                  // Random X within the room
+            newTreasureY = roomY + random(0, 8);                  // Random Y within the room
+        } while (virtualMatrix[newTreasureY][newTreasureX] == 1); // Ensure it's not placed on a wall
+
+        treasures[i].x = newTreasureX;
+        treasures[i].y = newTreasureY;
+        treasures[i].isCollected = false;
+        treasures[i].spawnTime = millis();
+        treasures[i].isVisible = true;
     }
-    treasure.x = newTreasureX; // Random X position
-    treasure.y = newTreasureY; // Random Y position
-    treasure.isVisible = true;
-    treasure.lastBlinkTime = millis();
-    treasure.spawnTime = millis();
 }
+
 void updateTreasureDisplay(unsigned long currentMillis)
 {
     const unsigned long TREASURE_BLINK_INTERVAL = 100; // Faster blink interval for treasure
-    if (currentMillis - treasure.lastBlinkTime >= TREASURE_BLINK_INTERVAL)
+
+    for (int i = 0; i < MAX_TREASURES; i++)
     {
-        treasure.isVisible = !treasure.isVisible;
-        treasure.lastBlinkTime = currentMillis;
+        if (!treasures[i].isCollected)
+        { // Only update display for uncollected treasures
+            if (currentMillis - treasures[i].lastBlinkTime >= TREASURE_BLINK_INTERVAL)
+            {
+                treasures[i].isVisible = !treasures[i].isVisible;
+                treasures[i].lastBlinkTime = currentMillis;
+            }
+        }
     }
 }
+
 void runGame()
 {
     unsigned long currentMillis = millis();
@@ -936,14 +1226,12 @@ void runGame()
         updateTreasureDisplay(currentMillis);
 
         // Check for treasure collection
-        if (player.x == treasure.x && player.y == treasure.y)
-        {
-            // Calculate points based on the new formula
-            unsigned long timeTaken = currentMillis - treasure.spawnTime;
-            int pointsForThisTreasure = max(50 - (timeTaken / 1000), 10); // Decrease points every second, min 10
-            player.points += pointsForThisTreasure;
+        checkTreasureCollection();
 
-            placeTreasure(); // Reposition the treasure
+        // Check if all treasures are collected
+        if (countUncollectedTreasures() == 0)
+        {
+            placeTreasures(); // Spawn new treasures
         }
         // Display the updated matrix
         displayMatrix();
@@ -977,20 +1265,22 @@ void displayEndGameMenu(EndGameOption &lastEndGameOption, EndGameOption endGameO
     }
 }
 
-EndGameOption handleEndGameControls(EndGameOption &endGameOption, bool &hasSelected, unsigned long displayEndTime)
+EndGameOption handleEndGameControls(EndGameOption endGameOption, bool &hasSelected, unsigned long displayEndTime)
 {
     if (millis() >= displayEndTime)
     {
         // Read joystick input for navigation
         int joystickY = analogRead(joystickYPin);
 
-        if (joystickY < JOYSTICK_THRESHOLD && endGameOption != RETRY)
+        if (joystickY < JOYSTICK_THRESHOLD && endGameOption != MAIN_MENU)
         {
-            endGameOption = RETRY;
+            playSound(MenuNavigationSound);
+            return MAIN_MENU;
         }
-        else if (joystickY > 1023 - JOYSTICK_THRESHOLD && endGameOption != MAIN_MENU)
+        else if (joystickY > 1023 - JOYSTICK_THRESHOLD && endGameOption != RETRY)
         {
-            endGameOption = MAIN_MENU;
+            playSound(MenuNavigationSound);
+            return RETRY;
         }
 
         if (joystickButtonPressed())
@@ -1092,7 +1382,8 @@ int checkHighScore(int playerScore)
     }
     return -1; // Player's score does not beat any high score
 }
-void updateHighScores()
+
+bool updateHighScores()
 {
     int position = checkHighScore(player.points);
     if (position != -1)
@@ -1112,10 +1403,12 @@ void updateHighScores()
             strncpy(highScores[position].playerName, playerName.c_str(), sizeof(highScores[position].playerName));
             // Ensure null termination
             highScores[position].playerName[sizeof(highScores[position].playerName) - 1] = '\0';
+            saveHighScores(highScores, MAX_HIGH_SCORES); // Save the updated scores to EEPROM
+            playerName = "";
+            return true; // Reset player name for next game
         }
-        playerName = "";                             // Reset player name for next game
-        saveHighScores(highScores, MAX_HIGH_SCORES); // Save the updated scores to EEPROM
     }
+    return false;
 }
 
 void endGame()
@@ -1157,14 +1450,12 @@ void endGame()
 
     if (isEnteringHighScore)
     {
-        if (enterPlayerName())
+        if (updateHighScores())
         {
-            updateHighScores();
-
             isEnteringHighScore = false;
             hasEnteredEndGameMenu = true;
-            return;
         }
+        return;
     }
 
     // Step 3: Display End Game Menu
@@ -1180,14 +1471,6 @@ void endGame()
         }
         else
         {
-            hasEnteredEndGame = false;
-            hasEnteredEndGameMenu = false;
-            isEnteringHighScore = false;
-            hasSelected = false;
-
-            endGameOption = RETRY;
-            lastEndGameOption = UNKNOWN;
-            displayEndTime = 0;
 
             // Execute the selected option
             if (endGameOption == RETRY)
@@ -1200,24 +1483,36 @@ void endGame()
                 goBack();
                 clearMatrix();
             }
+
+            hasEnteredEndGame = false;
+            hasEnteredEndGameMenu = false;
+            isEnteringHighScore = false;
+            hasSelected = false;
+
+            endGameOption = RETRY;
+            lastEndGameOption = UNKNOWN;
+            displayEndTime = 0;
         }
     }
 }
 
-void restartGame()
+void restartPlayer()
 {
     // Reset player's position and state
-    player.x = 3; // Set to initial player X position
-    player.y = 3; // Set to initial player Y position
+    player.x = 3;      // Set to initial player X position
+    player.y = 3;      // Set to initial player Y position
+    player.points = 0; // Reset the player's score
     player.isVisible = true;
     player.lastBlinkTime = millis();
-
+}
+void restartGame()
+{
+    restartPlayer();
     // Reset the treasure
-    placeTreasure(); // This function will also set treasure's initial position and spawn time
+    placeTreasures(); // This function will also set treasure's initial position and spawn time
 
     // Reset game variables
     gameStartTime = millis(); // Restart the game timer
-    player.points = 0;        // Reset the player's score
 
     // Reset any other game-related variables if needed
 
@@ -1348,6 +1643,13 @@ void playSound(SoundType sound)
         break;
     case ButtonPressSound:
         tone(BUZZER_PIN, BUTTON_PRESS_FREQUENCY, BUTTON_PRESS_DURATION); // Example: 1500 Hz for 100 ms
+        break;
+    case GameStartSound:
+        for (int i = 0; i < GAME_START_NOTES; ++i)
+        {
+            tone(BUZZER_PIN, GAME_START_FREQUENCIES[i], GAME_START_DURATIONS[i]);
+            delay(GAME_START_DURATIONS[i]); // Wait for the tone to finish
+        }
         break;
     // Add more cases for different sounds
     default:
