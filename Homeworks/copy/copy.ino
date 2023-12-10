@@ -615,18 +615,19 @@ void displayLCDBrightnessmenu()
         if (brightnessSelection == menuSave)
         {
             lcd.print((char)2); // Right arrow
-            lcd.print("Save  Cancel");
+            lcd.print(F("Save  Cancel"));
         }
         else if (brightnessSelection == menuCancel)
         {
-            lcd.print("Save  ");
+            lcd.print(F("Save  "));
             lcd.print((char)2); // Right arrow
-            lcd.print("Cancel");
+            lcd.print(F("Cancel"));
         }
         else
         {
-            lcd.print("Save  Cancel");
+            lcd.print(F("Save  Cancel"));
         }
+
         lastBrightnessSelection = brightnessSelection;
     }
 }
@@ -734,7 +735,7 @@ void displayMatrixBrightnessmenu()
     if (lastMatrixBrightness != matrixBrightness)
     {
         lcd.setCursor(0, 0);
-        lcd.print("Matrix Bright: ");
+        lcd.print(F("Matrix Bright: "));
         lcd.setCursor(14, 0);
 
         if (matrixBrightness < 10)
@@ -750,10 +751,29 @@ void displayMatrixBrightnessmenu()
     if (lastBrightnessSelection != brightnessSelection)
     {
         lcd.setCursor(0, 1);
-        lcd.print(brightnessSelection == menuSave ? (char)2 : ' '); // Right arrow for 'Save'
-        lcd.print("Save  ");
-        lcd.print(brightnessSelection == menuCancel ? (char)2 : ' '); // Right arrow for 'Cancel'
-        lcd.print("Cancel");
+
+        // For 'Save'
+        if (brightnessSelection == menuSave)
+        {
+            lcd.print((char)2); // Right arrow for 'Save'
+        }
+        else
+        {
+            lcd.print(' ');
+        }
+        lcd.print(F("Save  "));
+
+        // For 'Cancel'
+        if (brightnessSelection == menuCancel)
+        {
+            lcd.print((char)2); // Right arrow for 'Cancel'
+        }
+        else
+        {
+            lcd.print(' ');
+        }
+        lcd.print(F("Cancel"));
+
         lastBrightnessSelection = brightnessSelection;
     }
 }
@@ -946,11 +966,11 @@ void displayGenericMenu(const MenuItem menuItems[], int menuItemCount, int &curr
             lcd.setCursor(0, i);
             if (startIndex + i == currentSelection)
             {
-                lcd.print(">");
+                lcd.print(F(">"));
             }
             else
             {
-                lcd.print(" ");
+                lcd.print(F(" "));
             }
             lcd.print(menuItems[startIndex + i].name);
         }
@@ -988,9 +1008,9 @@ void displayhighscores()
             {
                 lcd.setCursor(0, i);
                 lcd.print(scoreIndex + 1);
-                lcd.print(". ");
+                lcd.print(F(". "));
                 lcd.print(highscores[scoreIndex].playerName);
-                lcd.print(" - ");
+                lcd.print(F(" - "));
                 lcd.print(highscores[scoreIndex].score);
             }
         }
@@ -1069,13 +1089,13 @@ void displayIntroMessage()
         }
         lcd.setCursor(0, 0); // Start at the first row
         lcd.write(byte(3));
-        lcd.print("  WELCOME TO  ");
+        lcd.print(F("  WELCOME TO  "));
         lcd.write(byte(3)); // Star character
 
         // Second Row: "*treasure chest* TREASURE HUNT *treasure chest*"
         lcd.setCursor(0, 1); // Move to the second row
         lcd.write(byte(4));  // Treasure chest character
-        lcd.print(" TREASUREHUNT ");
+        lcd.print(F(" TREASUREHUNT "));
         lcd.write(byte(4)); // Treasure chest character
 
         // Display the logo on the LED matrix
@@ -1377,20 +1397,20 @@ void runGame()
             lcd.setCursor(0, 0);
             lcd.print(F("T:"));
             lcd.print(totalRemainingMinutes);
-            lcd.print(":");
+            lcd.print(F(":"));
             if (totalRemainingSeconds < 10)
             {
-                lcd.print("0"); // Leading zero for single digit seconds
+                lcd.print(F("0")); // Leading zero for single digit seconds
             }
             lcd.print(totalRemainingSeconds);
-            lcd.print(" R:");
+            lcd.print(F(" R:"));
             lcd.print(roundTimeRemaining);
 
             // Display player's points on the second row
             lcd.setCursor(0, 1);
-            lcd.print("Pts: ");
+            lcd.print(F("Pts: "));
             lcd.print(player.points);
-            lcd.print(" Rm:");
+            lcd.print(F(" Rm:"));
             lcd.print(getCurrentRoom());
             lastLCDUpdate = currentMillis;
         }
@@ -1426,18 +1446,18 @@ void displayEndgameMessage()
     if (highScoreRank != -1)
     {
         // Player achieved a high score
-        lcd.print("Congrats! Rank ");
+        lcd.print(F("Congrats! Rank "));
         lcd.print(highScoreRank + 1); // Adding 1 because rank is 0-indexed
     }
     else
     {
         // Player did not achieve a high score
-        lcd.print("Game finished!");
+        lcd.print(F("Game finished!"));
     }
 
     // Display player's points
     lcd.setCursor(0, 1);
-    lcd.print("Points: ");
+    lcd.print(F("Points: "));
     lcd.print(player.points);
 }
 
@@ -1449,10 +1469,10 @@ void displayEndgameMenu(EndgameOption &lastEndgameOption, EndgameOption endgameO
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print(endgameOption == retry ? (char)2 : ' ');
-        lcd.print("Retry");
+        lcd.print(F("Retry"));
         lcd.setCursor(0, 1);
         lcd.print(endgameOption == mainMenuState ? (char)2 : ' ');
-        lcd.print("Main menu");
+        lcd.print(F("Main menu"));
 
         lastEndgameOption = endgameOption;
     }
@@ -1498,7 +1518,7 @@ bool enterPlayerName(bool reset = false)
         // Force an initial display update
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("Enter Name:");
+        lcd.print(F("Enter Name:"));
         lcd.setCursor(0, 1);
         lcd.print(playerName + characters[playerNameCharIndex]);
         return false; // Exit the function after resetting
@@ -1537,7 +1557,7 @@ bool enterPlayerName(bool reset = false)
         {
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Enter Name:");
+            lcd.print(F("Enter Name:"));
             lcd.setCursor(0, 1);
             lcd.print(playerName + currentChar);
             lastDisplayedChar = currentChar;
@@ -1771,38 +1791,50 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
 ////////////////////////////////////////////////////////////////
 void scrollText(const String &text)
 {
-    static unsigned long lastScrollTime = 0;
-    const unsigned long scrollDelay = 500; // Delay between scroll steps, in milliseconds
-    static int scrollPosition = 0;
+    static int currentLine = 0;
+    static unsigned long lastJoystickMoveTime = 0;
+    const int maxLineLength = 17;
+    const int totalLines = (text.length() + maxLineLength - 1) / maxLineLength;
+    const unsigned long joystickMoveDelay = 200; // Delay to prevent rapid joystick input
 
-    if (millis() - lastScrollTime > scrollDelay)
+    int joystickY = analogRead(joystickYPin);
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastJoystickMoveTime > joystickMoveDelay)
     {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-
-        // Display a portion of the text starting from scrollPosition
-        for (int i = 0; i < 16; i++) // Assuming a 16x2 LCD
+        if (joystickY < joystickThreshold)
         {
-            if (scrollPosition + i < text.length())
-            {
-                lcd.print(text[scrollPosition + i]);
-            }
+            if (currentLine > 0)
+                currentLine--;
+            lastJoystickMoveTime = currentMillis;
         }
-
-        // Update scrollPosition for the next frame
-        scrollPosition++;
-        if (scrollPosition >= text.length())
+        else if (joystickY > 1023 - joystickThreshold)
         {
-            scrollPosition = 0; // Reset to start after reaching the end
+            if (currentLine < totalLines - 2)
+                currentLine++;
+            lastJoystickMoveTime = currentMillis;
         }
-
-        lastScrollTime = millis();
     }
+
+    lcd.clear();
+    for (int row = 0; row < 2; row++)
+    {
+        int lineIndex = currentLine + row;
+        if (lineIndex < totalLines)
+        {
+            lcd.setCursor(0, row);
+            int startIndex = lineIndex * maxLineLength;
+            int endIndex = min(startIndex + maxLineLength, text.length());
+            lcd.print(text.substring(startIndex, endIndex));
+        }
+    }
+
     if (joystickButtonPressed())
     {
         goBack();
     }
 }
+
 ////////////////////////////////////////////////////////////////
 void settingsmenuDisplay()
 {
@@ -2027,14 +2059,41 @@ void displaysoundsettingsmenu()
     if (millis() - lastMoveTime <= moveDelay)
     {
         lcd.setCursor(0, 0);
-        lcd.print("sound: ");
+        lcd.print(F("Sound: "));
         lcd.setCursor(0, 1);
-        lcd.print(soundMenuSelection == menuYes ? (char)2 : ' '); // Special character for 'YES'
-        lcd.print("YES ");
-        lcd.print(soundMenuSelection == menuNo ? (char)2 : ' '); // Special character for 'NO'
-        lcd.print("NO ");
-        lcd.print(soundMenuSelection == menuCancel ? (char)2 : ' '); // Special character for 'CANCEL'
-        lcd.print("CANCEL");
+
+        // For 'YES'
+        if (soundMenuSelection == menuYes)
+        {
+            lcd.print((char)2); // Special character for 'YES'
+        }
+        else
+        {
+            lcd.print(' ');
+        }
+        lcd.print(F("YES "));
+
+        // For 'NO'
+        if (soundMenuSelection == menuNo)
+        {
+            lcd.print((char)2); // Special character for 'NO'
+        }
+        else
+        {
+            lcd.print(' ');
+        }
+        lcd.print(F("NO "));
+
+        // For 'CANCEL'
+        if (soundMenuSelection == menuCancel)
+        {
+            lcd.print((char)2); // Special character for 'CANCEL'
+        }
+        else
+        {
+            lcd.print(' ');
+        }
+        lcd.print(F("CANCEL"));
     }
 
     // Handle button press
