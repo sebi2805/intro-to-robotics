@@ -63,7 +63,9 @@ struct Treasure
     int x;
     int y;
     bool isVisible;
-    bool isCollected;
+    bool isCollected = false;
+    bool isKilled = false;
+    unsigned long killTime;
     unsigned long lastBlinkTime;
     unsigned long spawnTime; // Time when the treasure is placed needed for computing the actual store
 };
@@ -93,7 +95,8 @@ enum SoundType
     introStartSound,
     outroEndingSound,
     unknownSound,
-    treasureCollectionSound
+    treasureCollectionSound,
+    allTreasuresKilledSound
 };
 
 enum MenuOptions
@@ -167,6 +170,11 @@ const int outroSoundNotes = sizeof(outroSoundFrequencies) / sizeof(int); // Numb
 const int treasureCollectionFrequencies[] = {880, 988, 1047};                            // Frequencies in Hz (A5, B5, C6)
 const int treasureCollectionDurations[] = {50, 50, 100};                                 // Short, quick durations in milliseconds
 const int treasureCollectionNotes = sizeof(treasureCollectionFrequencies) / sizeof(int); // Number of notes
+
+// Constants for the All Treasures Killed Sound
+const int allTreasuresKilledFrequencies[] = {1047, 880, 784, 659, 523}; // Frequencies from C6 to C5
+const int allTreasuresKilledDurations[] = {50, 50, 50, 50, 100};        // Durations in milliseconds
+const int allTreasuresKilledNotes = sizeof(allTreasuresKilledFrequencies) / sizeof(int);
 
 // ------------------------------
 // Text Constants
@@ -323,7 +331,7 @@ ProgramState currentState = menu;
 SettingsState currentStatesettings = settingsMenuState;
 unsigned long gameStartTime;
 bool gameStarted = true;
-unsigned long timeLimit = 30000;
+unsigned long timeLimit = 60000;
 bool introDisplayed = false;
 unsigned long introStartTime = 0;
 
@@ -382,7 +390,10 @@ void endgame();
 void restartgame();
 void updatePlayerPosition();
 void checkTreasureCollection();
+unsigned long getEarliestKillTime();
 void placeTreasures();
+bool areAllTreasuresKilled();
+int getCurrentRoom();
 
 // Display Functions
 void showSettings();
@@ -1131,7 +1142,7 @@ int countUncollectedTreasures()
     int uncollectedCount = 0;
     for (int i = 0; i < maxTreasures; i++)
     {
-        if (!treasures[i].isCollected)
+        if (!treasures[i].isCollected && !treasures[i].isKilled)
         {
             uncollectedCount++;
         }
@@ -1146,12 +1157,20 @@ void checkTreasureCollection()
         if (player.x == treasures[i].x && player.y == treasures[i].y && treasures[i].isVisible && !treasures[i].isCollected)
         {
             unsigned long timeTaken = currentMillis - treasures[i].spawnTime;
-            int pointsForThisTreasure = max(50 - (timeTaken / 1000), 10); // Decrease points every second, min 10
+            int timeBasedDeduction = min(timeTaken / 1000, 40); // Max deduction is 40
+            int pointsForThisTreasure = max(50 - timeBasedDeduction, 10);
             player.points += pointsForThisTreasure;
 
             treasures[i].isCollected = true;    // Mark the treasure as collected
             playSound(treasureCollectionSound); // Play the treasure sound
-            // Any other logic to handle after treasure collection
+        }
+
+        if (!treasures[i].isKilled && currentMillis > treasures[i].killTime && !treasures[i].isCollected)
+        {
+
+            playSound(allTreasuresKilledSound);
+            treasures[i].isKilled = true;
+            treasures[i].isVisible = false; // Optionally hide killed treasures
         }
     }
 }
@@ -1229,26 +1248,69 @@ void updatePlayerPosition()
 }
 
 ////////////////////////////////////////////////////////////////
+unsigned long getEarliestKillTime()
+{
+    unsigned long earliestKillTime = treasures[0].killTime; // Initialize with maximum possible value
+    for (int i = 1; i < maxTreasures; i++)
+    {
+        if (!treasures[i].isCollected && !treasures[i].isKilled && treasures[i].killTime < earliestKillTime)
+        {
+            earliestKillTime = treasures[i].killTime;
+        }
+    }
+    return earliestKillTime;
+}
 void placeTreasures()
+{
+    int nonKilledTreasures = 0;
+    for (int i = 0; i < maxTreasures; i++)
+    {
+        if (!treasures[i].isKilled)
+        {
+            nonKilledTreasures++;
+        }
+    }
+    for (int i = 0, placedTreasures = 0; i < maxTreasures && placedTreasures < nonKilledTreasures; i++)
+    {
+        if (!treasures[i].isKilled)
+        {
+            int newTreasureX, newTreasureY;
+            int roomX = (i % 2) * 8; // Room X-coordinPinate (either 0 or 8)
+            int roomY = (i / 2) * 8; // Room Y-coordinPinate (either 0 or 8)
+
+            do
+            {
+                newTreasureX = roomX + random(0, 8);                  // Random X within the room
+                newTreasureY = roomY + random(0, 8);                  // Random Y within the room
+            } while (virtualMatrix[newTreasureY][newTreasureX] == 1); // Ensure it's not placed on a wall
+
+            treasures[i].x = newTreasureX;
+            treasures[i].y = newTreasureY;
+
+            treasures[i].killTime = millis() + 20000; // 20 seconds kill time
+            treasures[i].isVisible = true;
+            treasures[i].isCollected = false;
+            treasures[i].spawnTime = millis();
+            placedTreasures++;
+        }
+    }
+}
+int getCurrentRoom()
+{
+    int roomX = player.x / (worldSize / 2);
+    int roomY = player.y / (worldSize / 2);
+    return roomY * 2 + roomX + 1; // +1 to make rooms start from 1 instead of 0
+}
+bool areAllTreasuresKilled()
 {
     for (int i = 0; i < maxTreasures; i++)
     {
-        int newTreasureX, newTreasureY;
-        int roomX = (i % 2) * 8; // Room X-coordinPinate (either 0 or 8)
-        int roomY = (i / 2) * 8; // Room Y-coordinPinate (either 0 or 8)
-
-        do
+        if (!treasures[i].isKilled)
         {
-            newTreasureX = roomX + random(0, 8);                  // Random X within the room
-            newTreasureY = roomY + random(0, 8);                  // Random Y within the room
-        } while (virtualMatrix[newTreasureY][newTreasureX] == 1); // Ensure it's not placed on a wall
-
-        treasures[i].x = newTreasureX;
-        treasures[i].y = newTreasureY;
-        treasures[i].isCollected = false;
-        treasures[i].spawnTime = millis();
-        treasures[i].isVisible = true;
+            return false; // Found a treasure that is not killed
+        }
     }
+    return true; // All treasures are killed
 }
 
 void updateTreasureDisplay(unsigned long currentMillis)
@@ -1276,7 +1338,7 @@ void runGame()
         playSound(gameStartSound); // Play the game start sound
         gameStarted = false;       // Set the flag to false after playing the sound
     }
-    if (currentMillis - gameStartTime > timeLimit)
+    if (currentMillis - gameStartTime > timeLimit || areAllTreasuresKilled())
     {
         if (playOutroSound)
         {
@@ -1302,24 +1364,37 @@ void runGame()
         { // Update every half second
             lcd.clear();
 
-            // Display remaining time on the first row
+            unsigned long timeElapsed = currentMillis - gameStartTime;
+            unsigned long totalRemainingTime = (timeLimit > timeElapsed) ? (timeLimit - timeElapsed) : 0;
+            int totalRemainingMinutes = totalRemainingTime / 60000;
+            int totalRemainingSeconds = (totalRemainingTime % 60000) / 1000;
+
+            // Current round time calculation
+            unsigned long earliestKillTime = getEarliestKillTime();
+            int roundTimeRemaining = (earliestKillTime > currentMillis) ? (earliestKillTime - currentMillis) / 1000 : 0; // Time in seconds until the earliest treasure despawns
+
+            // Display total remaining time and round time on the first row
             lcd.setCursor(0, 0);
-            lcd.print("Time: ");
-            lcd.print(minutesRemaining);
+            lcd.print(F("T:"));
+            lcd.print(totalRemainingMinutes);
             lcd.print(":");
-            if (secondsRemaining < 10)
+            if (totalRemainingSeconds < 10)
             {
-                lcd.print("0"); // LeadinPing zero for single digit seconds
+                lcd.print("0"); // Leading zero for single digit seconds
             }
-            lcd.print(secondsRemaining);
+            lcd.print(totalRemainingSeconds);
+            lcd.print(" R:");
+            lcd.print(roundTimeRemaining);
 
             // Display player's points on the second row
             lcd.setCursor(0, 1);
-            lcd.print("Points: ");
+            lcd.print("Pts: ");
             lcd.print(player.points);
-
+            lcd.print(" Rm:");
+            lcd.print(getCurrentRoom());
             lastLCDUpdate = currentMillis;
         }
+
         if (currentMillis - player.lastBlinkTime >= blinkInterval)
         { // Blink interval (250 ms)
             player.isVisible = !player.isVisible;
@@ -1327,14 +1402,14 @@ void runGame()
         }
         updateTreasureDisplay(currentMillis);
 
-        // Check for treasure collection
-        checkTreasureCollection();
-
         // Check if all treasures are collected
         if (countUncollectedTreasures() == 0)
         {
             placeTreasures(); // Spawn new treasures
         }
+        // Check for treasure collection
+        checkTreasureCollection();
+
         // Display the updated matrix
         displayMatrix();
         updatePlayerPosition();
@@ -1343,13 +1418,29 @@ void runGame()
 
 void displayEndgameMessage()
 {
+    int highScoreRank = checkHighScore(player.points);
+
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Game finished!");
+
+    if (highScoreRank != -1)
+    {
+        // Player achieved a high score
+        lcd.print("Congrats! Rank ");
+        lcd.print(highScoreRank + 1); // Adding 1 because rank is 0-indexed
+    }
+    else
+    {
+        // Player did not achieve a high score
+        lcd.print("Game finished!");
+    }
+
+    // Display player's points
     lcd.setCursor(0, 1);
     lcd.print("Points: ");
     lcd.print(player.points);
 }
+
 void displayEndgameMenu(EndgameOption &lastEndgameOption, EndgameOption endgameOption)
 {
     // Update the display only if the option has changed
@@ -1523,7 +1614,7 @@ void endgame()
     static EndgameOption endgameOption = retry;
     static EndgameOption lastEndgameOption = unknown;
     static unsigned long displayEndTime = 0;
-    const unsigned long displayDuration = 2000; // 2 seconds
+    const unsigned long displayDuration = 4000; // 2 seconds
 
     // Step 1: Display End game Message
     if (!hasEnteredEndgame)
@@ -1610,6 +1701,12 @@ void restartPlayer()
 }
 void restartgame()
 {
+    for (int i = 0; i < maxTreasures; i++)
+    {
+        treasures[i].isCollected = false;
+        treasures[i].isKilled = false;
+        treasures[i].isVisible = false;
+    }
     restartPlayer();
     // Reset the treasure
     placeTreasures(); // This function will also set treasure's initial position and spawn time
@@ -1773,6 +1870,13 @@ void playSound(SoundType sound)
         tone(buzzerPin, treasureCollectionFrequencies[noteIndex], treasureCollectionDurations[noteIndex]);
         lastSound = treasureCollectionSound;
         break;
+    case allTreasuresKilledSound:
+        for (int i = 0; i < allTreasuresKilledNotes; i++)
+        {
+            tone(buzzerPin, allTreasuresKilledFrequencies[i], allTreasuresKilledDurations[i]);
+            delay(allTreasuresKilledDurations[i]);
+        }
+        break;
     // Add more cases for different sounds
     default:
         break; // Optionally handle unknown sound types
@@ -1819,16 +1923,46 @@ void updateSound()
                 currentFrequency = treasureCollectionFrequencies[noteIndex];
             }
             break;
+        case allTreasuresKilledSound:
+
+            if (noteIndex < allTreasuresKilledNotes)
+            {
+                currentNoteDuration = allTreasuresKilledDurations[noteIndex];
+                currentFrequency = allTreasuresKilledFrequencies[noteIndex];
+            }
+            break;
         default:
             return; // No sound or unknown sound type
         }
 
         if (currentMillis - soundStartTime >= currentNoteDuration)
         {
+            int numberOfNotes = 0;
+            switch (lastSound)
+            {
+            case introStartSound:
+                numberOfNotes = introSoundNotes;
+                break;
+            case gameStartSound:
+                numberOfNotes = gameStartNotes;
+                break;
+            case outroEndingSound:
+                numberOfNotes = outroSoundNotes;
+                break;
+            case treasureCollectionSound:
+                numberOfNotes = treasureCollectionNotes;
+                break;
+            case allTreasuresKilledSound:
+                numberOfNotes = allTreasuresKilledNotes;
+                break;
+            default:
+                return; // No sound or unknown sound type
+            }
+
             noteIndex++;
             soundStartTime = currentMillis; // Update the start time
 
-            if (noteIndex < introSoundNotes)
+            if (noteIndex < numberOfNotes)
             { // Replace with correct note count for the current sound
                 tone(buzzerPin, currentFrequency, currentNoteDuration);
             }
