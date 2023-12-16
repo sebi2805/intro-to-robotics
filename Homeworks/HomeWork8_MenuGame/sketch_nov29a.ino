@@ -196,8 +196,7 @@ const int timeConversionFactor = 1000; // Converts milliseconds to seconds
 // ------------------------------
 // Text Constants
 // ------------------------------
-const String aboutText = "game: Gem Quest - By: DevTeam - GitHub: @DevTeam";
-const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
+
 const char characters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const int numCharacters = sizeof(characters) - 1; // -1 for the null terminator
 
@@ -1814,29 +1813,42 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
 }
 
 ////////////////////////////////////////////////////////////////
-void scrollText(const String &text)
+
+void scrollText(ProgramState state)
 {
+  String text;
+  switch (state)
+  {
+  case about:
+    text = F("game: Gem Quest - By: DevTeam - GitHub: @DevTeam");
+    break;
+  case highscoresState:
+    text = F("High Scores: Navigate with joystick, select with button.");
+    break;
+  default:
+    text = ""; // Default case: empty text
+    break;
+  }
+
   static int currentLine = 0;
   static unsigned long lastJoystickMoveTime = 0;
   const int maxLineLength = 17;
   const int totalLines = (text.length() + maxLineLength - 1) / maxLineLength;
-  const unsigned long joystickMoveDelay = 200; // Delay to prevent rapid joystick input
+  const unsigned long joystickMoveDelay = 100; // Adjusted for smoother scrolling
 
   int joystickY = analogRead(joystickYPin);
   unsigned long currentMillis = millis();
 
   if (currentMillis - lastJoystickMoveTime > joystickMoveDelay)
   {
-    if (joystickY < joystickThreshold)
+    if (joystickY < joystickThreshold && currentLine > 0)
     {
-      if (currentLine > 0)
-        currentLine--;
+      currentLine--;
       lastJoystickMoveTime = currentMillis;
     }
-    else if (joystickY > joyStickUpperThreshold - joystickThreshold)
+    else if (joystickY > joyStickUpperThreshold - joystickThreshold && currentLine < totalLines - 2)
     {
-      if (currentLine < totalLines - 2)
-        currentLine++;
+      currentLine++;
       lastJoystickMoveTime = currentMillis;
     }
   }
@@ -1852,6 +1864,18 @@ void scrollText(const String &text)
       int endIndex = min(startIndex + maxLineLength, text.length());
       lcd.print(text.substring(startIndex, endIndex));
     }
+  }
+
+  // Visual indicators for more text
+  if (currentLine > 0)
+  {
+    lcd.setCursor(15, 0); // Top right corner for up arrow
+    lcd.write(byte(0));   // Assuming byte(0) is an up arrow
+  }
+  if (currentLine < totalLines - 2)
+  {
+    lcd.setCursor(15, 1); // Bottom right corner for down arrow
+    lcd.write(byte(1));   // Assuming byte(1) is a down arrow
   }
 
   if (joystickButtonPressed())

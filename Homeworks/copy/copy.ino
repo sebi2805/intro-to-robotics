@@ -85,7 +85,8 @@ enum SettingsState
     settingsMenuState,
     lcdBrightnessState,
     matrixBrightnessState,
-    sound
+    sound,
+    resetHighscoresState
 };
 enum SoundType
 {
@@ -196,8 +197,7 @@ const int timeConversionFactor = 1000; // Converts milliseconds to seconds
 // ------------------------------
 // Text Constants
 // ------------------------------
-const String aboutText = "game: Gem Quest - By: DevTeam - GitHub: @DevTeam";
-const String howToPlayText = "Move joystick to navigate. Button to select. Avoid obstacles, collect items. Have fun!";
+
 const char characters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const int numCharacters = sizeof(characters) - 1; // -1 for the null terminator
 
@@ -395,6 +395,7 @@ void updateLCDBrightness();
 void handleLCDBrightnessSelection();
 void lcdBrightnessControl();
 void matrixBrightnessControl();
+void resetHighscore();
 void displayLCDBrightness();
 void soundControl();
 void goBack();
@@ -421,11 +422,12 @@ void displayHighscores();
 void displayMatrix();
 void displayIntroMessage();
 void updateTreasureDisplay(unsigned long currentMillis);
-void scrollText(const String &text);
+void scrollText(ProgramState state);
 void settingsMenuDisplay();
 void displayMatrixBrightnessMenu();
 void displayEndgameMessage();
 void displayStateLogo();
+void displayResetHighScoresMenu();
 
 // Brightness Settings
 void applyLCDBrightness();
@@ -447,11 +449,13 @@ int getNumberOfNotes();
 void togglesoundsettings();
 void savesoundsettings();
 void loadSoundSettings();
+void displaySoundSettingsMenu();
 
 // High Score Functions
 void saveHighscores(HighscoresEntry scores[], int count);
 void loadHighscores();
 bool updateHighscores();
+void resetHighscores();
 
 // Game Logic and Navigation
 void updateMenuNavigation(int &currentSelection, const int menuItemCount);
@@ -471,10 +475,12 @@ bool isTreasureInCurrentRoom(int treasureIndex);
 // Menu Items
 // ------------------------------
 MenuItem settingsMenu[] = {
-    {"LCD Brightness", lcdBrightnessControl},
-    {"Matrix Brightness", matrixBrightnessControl},
+    {"LCD Bright", lcdBrightnessControl},
+    {"Matrix Bright", matrixBrightnessControl},
     {"Sound", soundControl},
-    {"Go back", goBack}};
+    {"Reset scores", resetHighscore},
+    {"Go back", goBack},
+};
 int settingsMenuItemCount = sizeof(settingsMenu) / sizeof(MenuItem);
 
 // ------------------------------
@@ -571,10 +577,10 @@ void loop()
             settingsMenuDisplay();
             break;
         case about:
-            scrollText(aboutText);
+            scrollText(about);
             break;
         case howToPlayState:
-            scrollText(howToPlayText);
+            scrollText(howToPlayState);
             break;
         }
         displayStateLogo();
@@ -869,12 +875,12 @@ void updateMatrixBrightness()
         }
         else if (joystickX < joystickThreshold)
         {
-            brightnessSelection = 1; // Select "Save"
+            brightnessSelection = menuSave; // Select "Save"
             lastUpdateTime = millis();
         }
-        else if (joystickX > 1023 - joystickThreshold)
+        else if (joystickX > joyStickUpperThreshold - joystickThreshold)
         {
-            brightnessSelection = 2; // Select "Cancel"
+            brightnessSelection = menuCancel; // Select "Cancel"
             lastUpdateTime = millis();
         }
 
@@ -924,6 +930,10 @@ void soundControl()
     currentStateSettings = sound;
 };
 
+void resetHighscore()
+{
+    currentStateSettings = resetHighscoresState;
+};
 ////////////////////////////////////////////////////////////////
 void goBack()
 {
@@ -934,6 +944,7 @@ void startGame()
 {
     currentState = game;
     gameStartTime = millis();
+    placeTreasures();
 }
 
 void showSettings()
@@ -1120,7 +1131,7 @@ void displayIntroMessage()
         // Second Row: "*treasure chest* TREASURE HUNT *treasure chest*"
         lcd.setCursor(0, 1); // Move to the second row
         lcd.write(byte(4));  // Treasure chest character
-        lcd.print(F(" GEM QUEST "));
+        lcd.print(F("  GEM QUEST   "));
         lcd.write(byte(4)); // Treasure chest character
 
         // Display the logo on the LED matrix
@@ -1383,6 +1394,7 @@ void runGame()
         playSound(gameStartSound); // Play the game start sound
         gameStarted = false;       // Set the flag to false after playing the sound
     }
+
     if (currentMillis - gameStartTime > timeLimit || areAllTreasuresKilled())
     {
         if (playOutroSound)
@@ -1394,6 +1406,7 @@ void runGame()
         endgame();
         return;
     }
+
     else
     {
         // game logic...
@@ -1648,7 +1661,19 @@ bool updateHighscores()
     }
     return false;
 }
+void resetHighscores()
+{
+    HighscoresEntry defaultEntry;
+    memset(&defaultEntry, 0, sizeof(HighscoresEntry)); // Set all bytes of defaultEntry to 0
+    defaultEntry.score = 0;                            // Explicitly set score to 0 for clarity
 
+    int address = eepromStartAddress;
+    for (int i = 0; i < maxHighScores; i++)
+    {
+        EEPROM.put(address, defaultEntry);
+        address += sizeof(HighscoresEntry);
+    }
+}
 void endgame()
 {
     static bool hasEnteredEndgame = false;
@@ -1709,7 +1734,14 @@ void endgame()
         }
         else
         {
-
+            for (int i = 0; i < maxTreasures; i++)
+            {
+                treasures[i].isCollected = false;
+                treasures[i].isKilled = false;
+                treasures[i].isVisible = false;
+            }
+            restartPlayer();
+            gameStartTime = millis(); // Restart the game timer
             // Execute the selected option
             if (endgameOption == retry)
             {
@@ -1746,18 +1778,11 @@ void restartPlayer()
 }
 void restartGame()
 {
-    for (int i = 0; i < maxTreasures; i++)
-    {
-        treasures[i].isCollected = false;
-        treasures[i].isKilled = false;
-        treasures[i].isVisible = false;
-    }
-    restartPlayer();
+
     // Reset the treasure
     placeTreasures(); // This function will also set treasure's initial position and spawn time
 
     // Reset game variables
-    gameStartTime = millis(); // Restart the game timer
 
     // Reset any other game-related variables if needed
 
@@ -1814,44 +1839,59 @@ void updateMenuNavigation(int &currentSelection, const int menuItemCount)
 }
 
 ////////////////////////////////////////////////////////////////
-void scrollText(const String &text)
+
+void scrollText(ProgramState state)
 {
-    static int currentLine = 0;
-    static unsigned long lastJoystickMoveTime = 0;
-    const int maxLineLength = 17;
-    const int totalLines = (text.length() + maxLineLength - 1) / maxLineLength;
-    const unsigned long joystickMoveDelay = 200; // Delay to prevent rapid joystick input
-
-    int joystickY = analogRead(joystickYPin);
-    unsigned long currentMillis = millis();
-
-    if (currentMillis - lastJoystickMoveTime > joystickMoveDelay)
+    String text;
+    switch (state)
     {
-        if (joystickY < joystickThreshold)
+    case about:
+        text = F("Gem Quest by Sebastian Virtopeanu. A college project showcasing interactive gameplay on Arduino. Enjoy the quest!");
+        break;
+    case howToPlayState:
+        text = F("Navigate with the joystick. Collect treasures before time runs out. Accumulate points to win. Enjoy the adventure!");
+        break;
+    default:
+        text = F("Welcome to Gem Quest!"); // Default text
+        break;
+    }
+
+    static int currentLine = 0;
+    static unsigned long lastMoveTime = 0;
+    const int maxLineLength = 16; // Adjust according to your LCD's width
+    const int totalLines = (text.length() + maxLineLength - 1) / maxLineLength;
+    const unsigned long moveDelay = 200; // Delay in milliseconds
+
+    unsigned long currentMillis = millis();
+    int joystickX = analogRead(joystickXPin);
+
+    if (currentMillis - lastMoveTime > moveDelay)
+    {
+        bool shouldScroll = (joystickX > joystickCenter + joystickThreshold) || (joystickX < joystickThreshold);
+
+        if (shouldScroll)
         {
-            if (currentLine > 0)
-                currentLine--;
-            lastJoystickMoveTime = currentMillis;
-        }
-        else if (joystickY > joyStickUpperThreshold - joystickThreshold)
-        {
-            if (currentLine < totalLines - 2)
-                currentLine++;
-            lastJoystickMoveTime = currentMillis;
+            currentLine += (joystickX < joystickThreshold) ? -1 : 1;
+            if (currentLine < 0)
+            {
+                currentLine = totalLines - 1; // Wrap around to the end if moving past the beginning
+            }
+            else if (currentLine >= totalLines)
+            {
+                currentLine = 0; // Wrap around to the start if moving past the end
+            }
+            lastMoveTime = currentMillis; // Update the last move time
         }
     }
 
     lcd.clear();
     for (int row = 0; row < 2; row++)
     {
-        int lineIndex = currentLine + row;
-        if (lineIndex < totalLines)
-        {
-            lcd.setCursor(0, row);
-            int startIndex = lineIndex * maxLineLength;
-            int endIndex = min(startIndex + maxLineLength, text.length());
-            lcd.print(text.substring(startIndex, endIndex));
-        }
+        int lineIndex = (currentLine + row) % totalLines;
+        lcd.setCursor(0, row);
+        int startIndex = lineIndex * maxLineLength;
+        int endIndex = min(startIndex + maxLineLength, text.length());
+        lcd.print(text.substring(startIndex, endIndex));
     }
 
     if (joystickButtonPressed())
@@ -1881,8 +1921,10 @@ void settingsMenuDisplay()
         displayMatrixBrightness();
         break;
     case sound:
-        displaysoundsettingsmenu();
+        displaySoundSettingsMenu();
         break;
+    case resetHighscoresState:
+        displayResetHighscores();
     }
 }
 /////////////////////////////////////////////////////////////////////////
@@ -2033,7 +2075,8 @@ void loadSoundSettings()
 {
     EEPROM.get(soundSettingAddress, soundEnabled);
 }
-void displaysoundsettingsmenu()
+
+void displaySoundSettingsMenu()
 {
     static MenuOptions soundMenuSelection = menuYes; // Default to 'YES'
     static bool hasEntered = false;                  // Track if it's the first time entering the menu
@@ -2125,6 +2168,95 @@ void displaysoundsettingsmenu()
         // Reset the last move time to prevent accidental double-press
         // For both YES/NO and CANCEL, return to the previous menu
         goBacksettings();   // Assuming this function is defined to handle going back
+        hasEntered = false; // Reset the flag when leaving the menu
+    }
+}
+////////////////////////////////////////////////////////////////
+void displayResetHighscores()
+{
+    static MenuOptions resetMenuSelection = menuNo; // Default to 'NO'
+    static bool hasEntered = false;                 // Track if it's the first time entering the menu
+    static unsigned long lastMoveTime = millis();   // For debouncing
+    const unsigned long moveDelay = 200;            // Delay in milliseconds for debouncing
+
+    // Clear the LCD only on the first entry
+    if (!hasEntered)
+    {
+        lcd.clear();
+        lastMoveTime = millis();
+        hasEntered = true;
+    }
+
+    // Read joystick input for navigation
+    int joystickX = analogRead(joystickXPin);
+
+    // Check if enough time has passed since the last move
+    if (millis() - lastMoveTime > moveDelay)
+    {
+        // Adjust selection based on left/right movement
+        if (joystickX < joystickThreshold)
+        {
+            resetMenuSelection = static_cast<MenuOptions>(max(static_cast<int>(resetMenuSelection) - 1, static_cast<int>(menuYes)));
+            lastMoveTime = millis();
+        }
+        else if (joystickX > joyStickUpperThreshold - joystickThreshold)
+        {
+            resetMenuSelection = static_cast<MenuOptions>(min(static_cast<int>(resetMenuSelection) + 1, static_cast<int>(menuCancel)));
+            lastMoveTime = millis();
+        }
+    }
+
+    // Update the display only if there was a change
+    if (millis() - lastMoveTime <= moveDelay)
+    {
+        lcd.setCursor(0, 0);
+        lcd.print(F("Reset Scores?"));
+        lcd.setCursor(0, 1);
+
+        // For 'YES'
+        if (resetMenuSelection == menuYes)
+        {
+            lcd.print((char)2); // Special character for 'YES'
+            lcd.print(F("YES "));
+        }
+        else
+        {
+            lcd.print(F("YES "));
+        }
+
+        // For 'NO'
+        if (resetMenuSelection == menuNo)
+        {
+            lcd.print((char)2); // Special character for 'NO'
+            lcd.print(F("NO "));
+        }
+        else
+        {
+            lcd.print(F("NO "));
+        }
+
+        // For 'CANCEL'
+        if (resetMenuSelection == menuCancel)
+        {
+            lcd.print((char)2); // Special character for 'CANCEL'
+            lcd.print(F("CANCEL"));
+        }
+        else
+        {
+            lcd.print(F("CANCEL"));
+        }
+    }
+
+    // Handle button press
+    if (joystickButtonPressed())
+    {
+        if (resetMenuSelection == menuYes)
+        {
+            resetHighscores(); // Function to reset the high scores
+        }
+        // For both YES/NO and CANCEL, return to the previous menu
+        goBacksettings();   // Assuming this function is defined to handle going back
+        loadHighscores();   // Reload the high scores from EEPROM
         hasEntered = false; // Reset the flag when leaving the menu
     }
 }
